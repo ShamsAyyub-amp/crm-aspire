@@ -4,30 +4,33 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "./modal";
 import SearchableSelect, { type SelectOption } from "./searchable-select";
-import { createContact } from "@/app/actions";
-import type { Company } from "@/lib/types";
+import { createContact, updateContact } from "@/app/actions";
+import type { Company, Contact } from "@/lib/types";
 
 export default function NewContactForm({
   open,
   onClose,
   companies,
   defaultCompanyId,
+  initial,
 }: {
   open: boolean;
   onClose: () => void;
   companies: Company[];
   defaultCompanyId?: string;
+  initial?: Contact;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const isEdit = !!initial;
 
-  const [first, setFirst] = useState("");
-  const [last, setLast] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [title, setTitle] = useState("");
-  const [companyId, setCompanyId] = useState<string | null>(defaultCompanyId ?? null);
+  const [first, setFirst] = useState(initial?.first_name ?? "");
+  const [last, setLast] = useState(initial?.last_name ?? "");
+  const [email, setEmail] = useState(initial?.email ?? "");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [companyId, setCompanyId] = useState<string | null>(initial?.company_id ?? defaultCompanyId ?? null);
 
   const companyOpts: SelectOption[] = useMemo(
     () =>
@@ -39,6 +42,7 @@ export default function NewContactForm({
   );
 
   function reset() {
+    if (isEdit) return;
     setFirst("");
     setLast("");
     setEmail("");
@@ -59,14 +63,17 @@ export default function NewContactForm({
       return;
     }
     start(async () => {
-      const r = await createContact({
+      const payload = {
         firstName: first,
         lastName: last,
         email: email || null,
         phone: phone || null,
         title: title || null,
         companyId,
-      });
+      };
+      const r = isEdit && initial
+        ? await updateContact(initial.id, payload)
+        : await createContact(payload);
       if (!r.ok) {
         setErr(r.reason);
         return;
@@ -78,7 +85,12 @@ export default function NewContactForm({
   }
 
   return (
-    <Modal open={open} onClose={onClose} eyebrow="New entry" title="Add contact">
+    <Modal
+      open={open}
+      onClose={onClose}
+      eyebrow={isEdit ? "Editing" : "New entry"}
+      title={isEdit ? "Edit contact" : "Add contact"}
+    >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="First name" required>
@@ -95,7 +107,7 @@ export default function NewContactForm({
               className="input"
               type="email"
               placeholder="first@company.com"
-              value={email}
+              value={email ?? ""}
               onChange={(e) => setEmail(e.target.value)}
             />
           </Field>
@@ -104,7 +116,7 @@ export default function NewContactForm({
               className="input"
               type="tel"
               placeholder="+1-555-…"
-              value={phone}
+              value={phone ?? ""}
               onChange={(e) => setPhone(e.target.value)}
             />
           </Field>
@@ -114,7 +126,7 @@ export default function NewContactForm({
           <input
             className="input"
             placeholder="e.g. VP Operations"
-            value={title}
+            value={title ?? ""}
             onChange={(e) => setTitle(e.target.value)}
           />
         </Field>
@@ -135,7 +147,7 @@ export default function NewContactForm({
             Cancel
           </button>
           <button className="btn-primary" onClick={submit} disabled={pending}>
-            {pending ? "Adding…" : "Add contact"}
+            {pending ? (isEdit ? "Saving…" : "Adding…") : isEdit ? "Save changes" : "Add contact"}
           </button>
         </div>
       </div>

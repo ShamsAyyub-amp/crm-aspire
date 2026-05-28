@@ -10,6 +10,7 @@ import ActivityComposer from "@/components/activity-composer";
 import DealBrief from "@/components/deal-brief";
 import DealEnrollments from "@/components/deal-enrollments";
 import NewTaskForm from "@/components/new-task-form";
+import DealActions from "@/components/deal-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,21 +18,23 @@ export default async function DealDetail({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const db = supabaseAdmin();
 
-  const [dealR, actsR, users] = await Promise.all([
+  const [dealR, actsR, allCompaniesR, allContactsR, users] = await Promise.all([
     db.from("deals").select("*").eq("id", id).single(),
     db.from("activities").select("*").eq("deal_id", id).order("occurred_at", { ascending: false }),
+    db.from("companies").select("*"),
+    db.from("contacts").select("*"),
     listUsers(),
   ]);
   if (!dealR.data) notFound();
   const deal = dealR.data as Deal;
   const activities = (actsR.data as Activity[]) ?? [];
+  const allCompanies = (allCompaniesR.data as Company[]) ?? [];
+  const allContacts = (allContactsR.data as Contact[]) ?? [];
 
-  const [companyR, contactR] = await Promise.all([
-    deal.company_id ? db.from("companies").select("*").eq("id", deal.company_id).single() : Promise.resolve({ data: null }),
-    deal.primary_contact_id ? db.from("contacts").select("*").eq("id", deal.primary_contact_id).single() : Promise.resolve({ data: null }),
-  ]);
-  const company = companyR.data as Company | null;
-  const contact = contactR.data as Contact | null;
+  const company = deal.company_id ? allCompanies.find((c) => c.id === deal.company_id) ?? null : null;
+  const contact = deal.primary_contact_id
+    ? allContacts.find((c) => c.id === deal.primary_contact_id) ?? null
+    : null;
   const owner = users.find((u) => u.id === deal.owner_id) ?? null;
 
   const stageLabel = STAGES.find((s) => s.id === deal.stage)?.label ?? deal.stage;
@@ -48,11 +51,14 @@ export default async function DealDetail({ params }: { params: Promise<{ id: str
             {owner?.name ?? "Unassigned"}
           </div>
         </div>
-        <div className="flex gap-2">
-          <Pill>{stageLabel}</Pill>
-          <Pill tone="brand">{money(deal.value_cents, deal.currency)}</Pill>
-          <Pill tone="ink">Prob {deal.probability}%</Pill>
-          {deal.expected_close_date && <Pill tone="ink">Close {new Date(deal.expected_close_date).toLocaleDateString()}</Pill>}
+        <div className="flex flex-col items-end gap-2.5">
+          <div className="flex gap-2">
+            <Pill>{stageLabel}</Pill>
+            <Pill tone="brand">{money(deal.value_cents, deal.currency)}</Pill>
+            <Pill tone="ink">Prob {deal.probability}%</Pill>
+            {deal.expected_close_date && <Pill tone="ink">Close {new Date(deal.expected_close_date).toLocaleDateString()}</Pill>}
+          </div>
+          <DealActions deal={deal} companies={allCompanies} contacts={allContacts} />
         </div>
       </div>
 

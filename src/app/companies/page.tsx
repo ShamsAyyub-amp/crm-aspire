@@ -4,6 +4,7 @@ import { moneyCompact } from "@/lib/format";
 import { OPEN_STAGES } from "@/lib/types";
 import type { Company, Contact, Deal } from "@/lib/types";
 import NewCompanyButton from "@/components/new-company-button";
+import CompanyRowActions from "@/components/company-row-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export default async function Companies() {
               <Th>Location</Th>
               <Th>Contacts</Th>
               <Th>Open pipeline</Th>
+              <Th className="w-20 text-right">Actions</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-100">
@@ -46,6 +48,7 @@ export default async function Companies() {
               const cs = contacts.filter((c) => c.company_id === co.id);
               const open = deals.filter((d) => d.company_id === co.id && OPEN_STAGES.includes(d.stage));
               const openValue = open.reduce((a, b) => a + b.value_cents, 0);
+              const dealCount = deals.filter((d) => d.company_id === co.id).length;
               return (
                 <tr key={co.id} className="hover:bg-ink-50">
                   <Td>
@@ -57,6 +60,9 @@ export default async function Companies() {
                   <Td>{[co.city, co.country].filter(Boolean).join(", ") || "—"}</Td>
                   <Td className="tabular-nums">{cs.length}</Td>
                   <Td className="tabular-nums">{moneyCompact(openValue)}</Td>
+                  <Td className="text-right">
+                    <CompanyRowActions company={co} contactCount={cs.length} dealCount={dealCount} />
+                  </Td>
                 </tr>
               );
             })}
@@ -67,8 +73,8 @@ export default async function Companies() {
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left font-medium px-3 py-2 text-xs uppercase tracking-wider">{children}</th>;
+function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <th className={`text-left font-medium px-3 py-2 text-xs uppercase tracking-wider ${className}`}>{children}</th>;
 }
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-3 py-2 ${className}`}>{children}</td>;

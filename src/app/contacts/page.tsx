@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { listUsers } from "@/lib/user";
 import type { Company, Contact, User } from "@/lib/types";
 import NewContactButton from "@/components/new-contact-button";
+import ContactRowActions from "@/components/contact-row-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function Contacts() {
               <Th>Email</Th>
               <Th>Phone</Th>
               <Th>Owner</Th>
+              <Th className="w-20 text-right">Actions</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-100">
@@ -52,6 +54,9 @@ export default async function Contacts() {
                   <Td>{c.email ? <a className="text-brand-600 hover:underline" href={`mailto:${c.email}`}>{c.email}</a> : "—"}</Td>
                   <Td>{c.phone ?? "—"}</Td>
                   <Td className="text-ink-500">{o?.name ?? "—"}</Td>
+                  <Td className="text-right">
+                    <ContactRowActions contact={c} companies={companiesList} />
+                  </Td>
                 </tr>
               );
             })}
@@ -62,8 +67,8 @@ export default async function Contacts() {
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left font-medium px-3 py-2 text-xs uppercase tracking-wider">{children}</th>;
+function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <th className={`text-left font-medium px-3 py-2 text-xs uppercase tracking-wider ${className}`}>{children}</th>;
 }
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-3 py-2 ${className}`}>{children}</td>;

@@ -4,8 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "./modal";
 import SearchableSelect, { type SelectOption } from "./searchable-select";
-import { createDeal } from "@/app/actions";
-import { STAGES, type Company, type Contact, type DealStage } from "@/lib/types";
+import { createDeal, updateDeal } from "@/app/actions";
+import { STAGES, type Company, type Contact, type Deal, type DealStage } from "@/lib/types";
 
 const SOURCES = ["Inbound", "Outbound", "Referral", "Partner", "Event", "Cold call", "Other"];
 
@@ -16,6 +16,7 @@ export default function NewDealForm({
   contacts,
   defaultStage = "lead",
   defaultCompanyId,
+  initial,
 }: {
   open: boolean;
   onClose: () => void;
@@ -23,18 +24,21 @@ export default function NewDealForm({
   contacts: Contact[];
   defaultStage?: DealStage;
   defaultCompanyId?: string;
+  initial?: Deal;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
-  const [name, setName] = useState("");
-  const [companyId, setCompanyId] = useState<string | null>(defaultCompanyId ?? null);
-  const [contactId, setContactId] = useState<string | null>(null);
-  const [stage, setStage] = useState<DealStage>(defaultStage);
-  const [value, setValue] = useState("");
-  const [closeDate, setCloseDate] = useState("");
-  const [source, setSource] = useState<string>("Inbound");
+  const isEdit = !!initial;
+
+  const [name, setName] = useState(initial?.name ?? "");
+  const [companyId, setCompanyId] = useState<string | null>(initial?.company_id ?? defaultCompanyId ?? null);
+  const [contactId, setContactId] = useState<string | null>(initial?.primary_contact_id ?? null);
+  const [stage, setStage] = useState<DealStage>(initial?.stage ?? defaultStage);
+  const [value, setValue] = useState(initial ? String(initial.value_cents / 100) : "");
+  const [closeDate, setCloseDate] = useState(initial?.expected_close_date ?? "");
+  const [source, setSource] = useState<string>(initial?.source ?? "Inbound");
 
   const companyOpts: SelectOption[] = useMemo(
     () =>
@@ -58,6 +62,7 @@ export default function NewDealForm({
   }, [contacts, companyId]);
 
   function reset() {
+    if (isEdit) return; // edit form keeps initial values
     setName("");
     setCompanyId(defaultCompanyId ?? null);
     setContactId(null);
@@ -86,28 +91,52 @@ export default function NewDealForm({
     }
 
     start(async () => {
-      const r = await createDeal({
-        name,
-        companyId,
-        primaryContactId: contactId,
-        stage,
-        valueCents,
-        expectedCloseDate: closeDate || null,
-        source,
-      });
-      if (!r.ok) {
-        setErr(r.reason);
-        return;
+      if (isEdit && initial) {
+        const r = await updateDeal(initial.id, {
+          name,
+          companyId,
+          primaryContactId: contactId,
+          stage,
+          valueCents,
+          expectedCloseDate: closeDate || null,
+          source,
+        });
+        if (!r.ok) {
+          setErr(r.reason);
+          return;
+        }
+        onClose();
+        router.refresh();
+      } else {
+        const r = await createDeal({
+          name,
+          companyId,
+          primaryContactId: contactId,
+          stage,
+          valueCents,
+          expectedCloseDate: closeDate || null,
+          source,
+        });
+        if (!r.ok) {
+          setErr(r.reason);
+          return;
+        }
+        reset();
+        onClose();
+        router.push(`/deals/${r.dealId}`);
+        router.refresh();
       }
-      reset();
-      onClose();
-      router.push(`/deals/${r.dealId}`);
-      router.refresh();
     });
   }
 
   return (
-    <Modal open={open} onClose={onClose} eyebrow="New entry" title="Create deal" width="max-w-xl">
+    <Modal
+      open={open}
+      onClose={onClose}
+      eyebrow={isEdit ? "Editing" : "New entry"}
+      title={isEdit ? "Edit deal" : "Create deal"}
+      width="max-w-xl"
+    >
       <div className="space-y-4">
         <Field label="Deal name" required>
           <input
@@ -126,7 +155,11 @@ export default function NewDealForm({
               value={companyId}
               onChange={(id) => {
                 setCompanyId(id);
-                setContactId(null);
+                // If the company changes, the previously-selected contact may not belong to it.
+                if (contactId) {
+                  const stillValid = contacts.some((c) => c.id === contactId && c.company_id === id);
+                  if (!stillValid) setContactId(null);
+                }
               }}
               placeholder="Pick a company…"
               emptyLabel="No matches. Create one from the Companies page."
@@ -151,7 +184,7 @@ export default function NewDealForm({
         <div className="grid grid-cols-3 gap-3">
           <Field label="Stage">
             <select className="input" value={stage} onChange={(e) => setStage(e.target.value as DealStage)}>
-              {STAGES.filter((s) => s.id !== "closed_won" && s.id !== "closed_lost").map((s) => (
+              {STAGES.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
                 </option>
@@ -172,7 +205,7 @@ export default function NewDealForm({
             <input
               className="input"
               type="date"
-              value={closeDate}
+              value={closeDate ?? ""}
               onChange={(e) => setCloseDate(e.target.value)}
             />
           </Field>
@@ -195,7 +228,7 @@ export default function NewDealForm({
             Cancel
           </button>
           <button className="btn-primary" onClick={submit} disabled={pending}>
-            {pending ? "Creating…" : "Create deal"}
+            {pending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create deal"}
           </button>
         </div>
       </div>

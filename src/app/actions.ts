@@ -265,6 +265,153 @@ export async function createContact(input: {
   return { ok: true, contactId: data.id };
 }
 
+export async function updateDeal(
+  dealId: string,
+  patch: {
+    name?: string;
+    companyId?: string | null;
+    primaryContactId?: string | null;
+    stage?: DealStage;
+    valueCents?: number;
+    probability?: number;
+    expectedCloseDate?: string | null;
+    source?: string | null;
+  }
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  if (patch.name !== undefined && !patch.name.trim()) return { ok: false, reason: "name cannot be empty" };
+
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name.trim();
+  if (patch.companyId !== undefined) row.company_id = patch.companyId;
+  if (patch.primaryContactId !== undefined) row.primary_contact_id = patch.primaryContactId;
+  if (patch.valueCents !== undefined) row.value_cents = patch.valueCents;
+  if (patch.probability !== undefined) row.probability = patch.probability;
+  if (patch.expectedCloseDate !== undefined) row.expected_close_date = patch.expectedCloseDate;
+  if (patch.source !== undefined) row.source = patch.source;
+  if (patch.stage !== undefined) {
+    row.stage = patch.stage;
+    row.status = patch.stage === "closed_won" ? "won" : patch.stage === "closed_lost" ? "lost" : "open";
+    // If they chose a stage but didn't override probability, follow the canonical stage prob.
+    if (patch.probability === undefined) {
+      row.probability = STAGES.find((s) => s.id === patch.stage)?.probability ?? 0;
+    }
+  }
+
+  const { error } = await db.from("deals").update(row).eq("id", dealId);
+  if (error) return { ok: false, reason: error.message };
+
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/pipeline");
+  revalidatePath("/dashboard");
+  revalidatePath("/analytics");
+  return { ok: true };
+}
+
+export async function deleteDeal(dealId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  const { error } = await db.from("deals").delete().eq("id", dealId);
+  if (error) return { ok: false, reason: error.message };
+  revalidatePath("/pipeline");
+  revalidatePath("/dashboard");
+  revalidatePath("/analytics");
+  revalidatePath("/contacts");
+  revalidatePath("/companies");
+  return { ok: true };
+}
+
+export async function updateCompany(
+  companyId: string,
+  patch: {
+    name?: string;
+    domain?: string | null;
+    industry?: string | null;
+    employees?: number | null;
+    city?: string | null;
+    country?: string | null;
+  }
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  if (patch.name !== undefined && !patch.name.trim()) return { ok: false, reason: "name cannot be empty" };
+
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name.trim();
+  if (patch.domain !== undefined) {
+    const clean = patch.domain?.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "") || null;
+    if (clean) {
+      // Dedupe collision check — exclude self.
+      const { data: existing } = await db
+        .from("companies")
+        .select("id,name")
+        .eq("domain", clean)
+        .neq("id", companyId)
+        .maybeSingle();
+      if (existing) return { ok: false, reason: `Another company already uses ${clean}: ${existing.name}` };
+    }
+    row.domain = clean;
+  }
+  if (patch.industry !== undefined) row.industry = patch.industry?.trim() || null;
+  if (patch.employees !== undefined) row.employees = patch.employees;
+  if (patch.city !== undefined) row.city = patch.city?.trim() || null;
+  if (patch.country !== undefined) row.country = patch.country?.trim() || null;
+
+  const { error } = await db.from("companies").update(row).eq("id", companyId);
+  if (error) return { ok: false, reason: error.message };
+  revalidatePath("/companies");
+  revalidatePath("/pipeline");
+  return { ok: true };
+}
+
+export async function deleteCompany(companyId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  const { error } = await db.from("companies").delete().eq("id", companyId);
+  if (error) return { ok: false, reason: error.message };
+  revalidatePath("/companies");
+  revalidatePath("/contacts");
+  revalidatePath("/pipeline");
+  return { ok: true };
+}
+
+export async function updateContact(
+  contactId: string,
+  patch: {
+    firstName?: string;
+    lastName?: string;
+    email?: string | null;
+    phone?: string | null;
+    title?: string | null;
+    companyId?: string | null;
+  }
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  if (patch.firstName !== undefined && !patch.firstName.trim()) return { ok: false, reason: "first name cannot be empty" };
+  if (patch.lastName !== undefined && !patch.lastName.trim()) return { ok: false, reason: "last name cannot be empty" };
+
+  const row: Record<string, unknown> = {};
+  if (patch.firstName !== undefined) row.first_name = patch.firstName.trim();
+  if (patch.lastName !== undefined) row.last_name = patch.lastName.trim();
+  if (patch.email !== undefined) row.email = patch.email?.trim().toLowerCase() || null;
+  if (patch.phone !== undefined) row.phone = patch.phone?.trim() || null;
+  if (patch.title !== undefined) row.title = patch.title?.trim() || null;
+  if (patch.companyId !== undefined) row.company_id = patch.companyId;
+
+  const { error } = await db.from("contacts").update(row).eq("id", contactId);
+  if (error) return { ok: false, reason: error.message };
+  revalidatePath("/contacts");
+  revalidatePath("/companies");
+  return { ok: true };
+}
+
+export async function deleteContact(contactId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  const { error } = await db.from("contacts").delete().eq("id", contactId);
+  if (error) return { ok: false, reason: error.message };
+  revalidatePath("/contacts");
+  revalidatePath("/companies");
+  revalidatePath("/pipeline");
+  return { ok: true };
+}
+
 export async function createTask(input: {
   title: string;
   dealId?: string | null;

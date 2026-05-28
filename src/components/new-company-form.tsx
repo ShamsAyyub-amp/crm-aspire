@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "./modal";
-import { createCompany } from "@/app/actions";
+import { createCompany, updateCompany } from "@/app/actions";
+import type { Company } from "@/lib/types";
 
 const INDUSTRIES = [
   "SaaS",
@@ -21,19 +22,29 @@ const INDUSTRIES = [
   "Other",
 ];
 
-export default function NewCompanyForm({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function NewCompanyForm({
+  open,
+  onClose,
+  initial,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initial?: Company;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const isEdit = !!initial;
 
-  const [name, setName] = useState("");
-  const [domain, setDomain] = useState("");
-  const [industry, setIndustry] = useState("SaaS");
-  const [employees, setEmployees] = useState("");
-  const [city, setCity] = useState("");
-  const [country, setCountry] = useState("");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [domain, setDomain] = useState(initial?.domain ?? "");
+  const [industry, setIndustry] = useState(initial?.industry ?? "SaaS");
+  const [employees, setEmployees] = useState(initial?.employees != null ? String(initial.employees) : "");
+  const [city, setCity] = useState(initial?.city ?? "");
+  const [country, setCountry] = useState(initial?.country ?? "");
 
   function reset() {
+    if (isEdit) return;
     setName("");
     setDomain("");
     setIndustry("SaaS");
@@ -55,14 +66,15 @@ export default function NewCompanyForm({ open, onClose }: { open: boolean; onClo
       return;
     }
     start(async () => {
-      const r = await createCompany({
+      const payload = {
         name,
         domain: domain || null,
         industry,
         employees: emp,
         city: city || null,
         country: country || null,
-      });
+      };
+      const r = isEdit && initial ? await updateCompany(initial.id, payload) : await createCompany(payload);
       if (!r.ok) {
         setErr(r.reason);
         return;
@@ -74,7 +86,12 @@ export default function NewCompanyForm({ open, onClose }: { open: boolean; onClo
   }
 
   return (
-    <Modal open={open} onClose={onClose} eyebrow="New entry" title="Add company">
+    <Modal
+      open={open}
+      onClose={onClose}
+      eyebrow={isEdit ? "Editing" : "New entry"}
+      title={isEdit ? "Edit company" : "Add company"}
+    >
       <div className="space-y-4">
         <Field label="Name" required>
           <input
@@ -91,12 +108,12 @@ export default function NewCompanyForm({ open, onClose }: { open: boolean; onClo
             <input
               className="input"
               placeholder="acme.com"
-              value={domain}
+              value={domain ?? ""}
               onChange={(e) => setDomain(e.target.value)}
             />
           </Field>
           <Field label="Industry">
-            <select className="input" value={industry} onChange={(e) => setIndustry(e.target.value)}>
+            <select className="input" value={industry ?? "SaaS"} onChange={(e) => setIndustry(e.target.value)}>
               {INDUSTRIES.map((i) => (
                 <option key={i} value={i}>
                   {i}
@@ -118,10 +135,10 @@ export default function NewCompanyForm({ open, onClose }: { open: boolean; onClo
             />
           </Field>
           <Field label="City">
-            <input className="input" placeholder="Chicago" value={city} onChange={(e) => setCity(e.target.value)} />
+            <input className="input" placeholder="Chicago" value={city ?? ""} onChange={(e) => setCity(e.target.value)} />
           </Field>
           <Field label="Country">
-            <input className="input" placeholder="US" value={country} onChange={(e) => setCountry(e.target.value)} />
+            <input className="input" placeholder="US" value={country ?? ""} onChange={(e) => setCountry(e.target.value)} />
           </Field>
         </div>
 
@@ -132,7 +149,7 @@ export default function NewCompanyForm({ open, onClose }: { open: boolean; onClo
             Cancel
           </button>
           <button className="btn-primary" onClick={submit} disabled={pending}>
-            {pending ? "Adding…" : "Add company"}
+            {pending ? (isEdit ? "Saving…" : "Adding…") : isEdit ? "Save changes" : "Add company"}
           </button>
         </div>
       </div>
