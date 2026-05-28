@@ -7,31 +7,34 @@ import { getCurrentUserId } from "@/lib/user";
 import type { ActivityType, DealStage } from "@/lib/types";
 import { STAGES } from "@/lib/types";
 
-export async function moveDealStage(dealId: string, stage: DealStage) {
+export async function moveDealStage(dealId: string, stage: DealStage, reason?: string | null) {
   const db = supabaseAdmin();
   const ownerId = await getCurrentUserId();
   const prob = STAGES.find((s) => s.id === stage)?.probability ?? 0;
   const status = stage === "closed_won" ? "won" : stage === "closed_lost" ? "lost" : "open";
   const closed_at = status === "open" ? null : new Date().toISOString();
 
-  // Get prior stage for the activity log.
-  const { data: prior } = await db.from("deals").select("stage").eq("id", dealId).single();
+  const { data: prior } = await db.from("deals").select("stage,name,value_cents,currency,owner_id").eq("id", dealId).single();
 
-  await db
-    .from("deals")
-    .update({ stage, probability: prob, status, closed_at })
-    .eq("id", dealId);
+  const patch: Record<string, unknown> = { stage, probability: prob, status, closed_at };
+  if (status !== "open" && reason !== undefined) patch.won_lost_reason = reason;
+  if (status === "open") patch.won_lost_reason = null;
+
+  await db.from("deals").update(patch).eq("id", dealId);
 
   await db.from("activities").insert({
     deal_id: dealId,
     type: "stage_change",
-    subject: `Stage changed: ${prior?.stage ?? "?"} → ${stage}`,
+    subject: `Stage changed: ${prior?.stage ?? "?"} → ${stage}${reason ? ` · ${reason}` : ""}`,
     owner_id: ownerId,
   });
 
   revalidatePath("/pipeline");
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/dashboard");
+  revalidatePath("/analytics");
+
+  return { prior, status };
 }
 
 export async function logActivity(input: {
@@ -71,6 +74,67 @@ export async function updateDealField(
   await db.from("deals").update(patch).eq("id", dealId);
   revalidatePath(`/deals/${dealId}`);
   revalidatePath("/pipeline");
+  revalidatePath("/dashboard");
+}
+
+export async function enrollContactInSequence(input: {
+  sequenceId: string;
+  contactId: string;
+  dealId?: string;
+}) {
+  const db = supabaseAdmin();
+  const ownerId = await getCurrentUserId();
+
+  // If already active for this contact+sequence, don't double-enroll.
+  const { data: existing } = await db
+    .from("sequence_enrollments")
+    .select("id,status")
+    .eq("sequence_id", input.sequenceId)
+    .eq("contact_id", input.contactId)
+    .in("status", ["active", "paused"])
+    .maybeSingle();
+  if (existing) return { ok: false, reason: "already enrolled" };
+
+  // Look up step 0's offset so next_step_at lands sensibly.
+  const { data: seq } = await db.from("sequences").select("steps").eq("id", input.sequenceId).single();
+  const firstOffset = (seq?.steps as any[])?.[0]?.day_offset ?? 0;
+  const next = new Date(Date.now() + firstOffset * 86400000).toISOString();
+
+  await db.from("sequence_enrollments").insert({
+    sequence_id: input.sequenceId,
+    contact_id: input.contactId,
+    deal_id: input.dealId ?? null,
+    current_step: 0,
+    status: "active",
+    enrolled_by: ownerId,
+    next_step_at: next,
+  });
+
+  revalidatePath("/sequences");
+  if (input.dealId) revalidatePath(`/deals/${input.dealId}`);
+  return { ok: true };
+}
+
+export async function setEnrollmentStatus(enrollmentId: string, status: "active" | "paused" | "cancelled" | "completed", reason?: string) {
+  const db = supabaseAdmin();
+  const patch: Record<string, unknown> = { status };
+  if (status === "paused") patch.paused_reason = reason ?? "manual";
+  if (status === "completed") patch.completed_at = new Date().toISOString();
+  await db.from("sequence_enrollments").update(patch).eq("id", enrollmentId);
+  revalidatePath("/sequences");
+}
+
+export async function completeTask(taskId: string) {
+  const db = supabaseAdmin();
+  await db.from("tasks").update({ completed_at: new Date().toISOString() }).eq("id", taskId);
+  revalidatePath("/tasks");
+  revalidatePath("/dashboard");
+}
+
+export async function uncompleteTask(taskId: string) {
+  const db = supabaseAdmin();
+  await db.from("tasks").update({ completed_at: null }).eq("id", taskId);
+  revalidatePath("/tasks");
   revalidatePath("/dashboard");
 }
 

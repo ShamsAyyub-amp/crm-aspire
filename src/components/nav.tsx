@@ -6,8 +6,12 @@ import { initials } from "@/lib/format";
 const links = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/pipeline", label: "Pipeline" },
+  { href: "/analytics", label: "Analytics" },
+  { href: "/tasks", label: "Tasks" },
+  { href: "/sequences", label: "Sequences" },
   { href: "/contacts", label: "Contacts" },
   { href: "/companies", label: "Companies" },
+  { href: "/integrations", label: "Integrations" },
 ];
 
 export default function Nav({ me, users }: { me: User | null; users: User[] }) {

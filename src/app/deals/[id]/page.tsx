@@ -7,6 +7,8 @@ import { STAGES } from "@/lib/types";
 import type { Activity, Company, Contact, Deal, User } from "@/lib/types";
 import DealAiPanel from "@/components/deal-ai-panel";
 import ActivityComposer from "@/components/activity-composer";
+import DealBrief from "@/components/deal-brief";
+import DealEnrollments from "@/components/deal-enrollments";
 
 export const dynamic = "force-dynamic";
 
@@ -51,9 +53,19 @@ export default async function DealDetail({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
+      {deal.status !== "open" && deal.won_lost_reason && (
+        <div className={`card p-3 text-sm border-l-4 ${deal.status === "won" ? "border-l-emerald-500" : "border-l-rose-500"}`}>
+          <span className="text-ink-500">{deal.status === "won" ? "Won — " : "Lost — "}</span>
+          <span className="font-medium">{deal.won_lost_reason}</span>
+        </div>
+      )}
+
+      <DealBrief dealId={deal.id} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
           <ActivityComposer dealId={deal.id} contactId={contact?.id ?? null} contactEmail={contact?.email ?? null} />
+          <DealEnrollments dealId={deal.id} />
 
           <section className="card p-5">
             <h2 className="text-sm font-semibold text-ink-700 mb-3">Activity</h2>

@@ -6,28 +6,33 @@ import { OPEN_STAGES, STAGES } from "@/lib/types";
 import type { Activity, Deal, User } from "@/lib/types";
 import NextActions from "@/components/next-actions";
 import HealthDot from "@/components/health-dot";
+import QuotaWidget from "@/components/quota-widget";
+import CrossInsights from "@/components/cross-insights";
 import { headers } from "next/headers";
+import type { Quota } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 async function loadAll() {
   const db = supabaseAdmin();
-  const [deals, acts, users, me] = await Promise.all([
+  const [deals, acts, quotas, users, me] = await Promise.all([
     db.from("deals").select("*"),
     db.from("activities").select("*").order("occurred_at", { ascending: false }).limit(15),
+    db.from("quotas").select("*"),
     listUsers(),
     getCurrentUserId(),
   ]);
   return {
     deals: (deals.data as Deal[]) ?? [],
     activities: (acts.data as Activity[]) ?? [],
+    quotas: (quotas.data as Quota[]) ?? [],
     users,
     meId: me,
   };
 }
 
 export default async function Dashboard() {
-  const { deals, activities, users, meId } = await loadAll();
+  const { deals, activities, quotas, users, meId } = await loadAll();
 
   const open = deals.filter((d) => OPEN_STAGES.includes(d.stage));
   const openValue = open.reduce((s, d) => s + d.value_cents, 0);
@@ -125,6 +130,10 @@ export default async function Dashboard() {
 
         <div className="space-y-6">
           <NextActions baseUrl={baseUrl} ownerId={meId} />
+
+          <CrossInsights ownerId={meId} />
+
+          <QuotaWidget quotas={quotas} users={users} deals={deals} />
 
           <section className="card p-5">
             <h2 className="text-sm font-semibold text-ink-700 mb-3">Leaderboard</h2>

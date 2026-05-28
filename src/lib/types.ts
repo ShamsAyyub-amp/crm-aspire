@@ -65,9 +65,64 @@ export type Deal = {
   health_reasoning: string | null;
   health_risks: { label: string; severity: "low" | "med" | "high" }[] | null;
   health_updated_at: string | null;
+  won_lost_reason: string | null;
+  stage_entered_at: string | null;
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+};
+
+export type Task = {
+  id: string;
+  deal_id: string | null;
+  contact_id: string | null;
+  owner_id: string | null;
+  title: string;
+  notes: string | null;
+  priority: "low" | "normal" | "high";
+  due_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+export type Quota = {
+  id: string;
+  user_id: string;
+  month_start: string;
+  target_cents: number;
+  currency: string;
+};
+
+export type SequenceStep = {
+  day_offset: number;
+  subject: string;
+  body: string;
+  type?: "email" | "task";
+};
+
+export type Sequence = {
+  id: string;
+  name: string;
+  description: string | null;
+  owner_id: string | null;
+  steps: SequenceStep[];
+  active: boolean;
+  created_at: string;
+};
+
+export type SequenceEnrollment = {
+  id: string;
+  sequence_id: string;
+  contact_id: string;
+  deal_id: string | null;
+  current_step: number;
+  status: "active" | "paused" | "completed" | "cancelled";
+  paused_reason: string | null;
+  enrolled_by: string | null;
+  enrolled_at: string;
+  last_step_at: string | null;
+  next_step_at: string | null;
+  completed_at: string | null;
 };
 
 export type Activity = {
