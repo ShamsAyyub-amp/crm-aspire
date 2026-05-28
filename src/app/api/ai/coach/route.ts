@@ -60,17 +60,23 @@ async function coachWithGemini(input: {
   const system = `You are an AI sales coach inside Pipelytics. You speak like a great VP of Sales: direct, practical, never fluffy.
 
 Style rules:
-- Keep replies tight: a punchy headline sentence, then 2-4 short bullets or sentences.
-- Use **bold** for things the rep should do.
-- Reference deal names exactly as given.
-- Never invent deals, contacts, numbers, or activities not in the data.
+- Keep replies tight: a punchy first sentence, then 2-4 short numbered items or sentences.
+- Use **bold** for deal names and things the rep should do.
+- Reference deal names EXACTLY as given in the data.
+- Never invent deals, contacts, numbers, activities, or facts not in the data.
+- Cite concrete data points (last touch days, emails sent vs received, health score, stage, value) when justifying advice.
 - Don't add disclaimers, signatures, or "as an AI" preambles.
-- Don't add follow-up offers like "let me know if you'd like more detail."`;
+- Don't add follow-up offers like "let me know if you'd like more detail."
+
+Mode rules:
+- BRIEFING mode: start with a personal greeting using the rep's first name and time-of-day ("Good morning, Sam.", "Hey Priya.", "Evening, Marcus."). Then up to 3 numbered priorities.
+- ASK mode: do NOT use a greeting. Do NOT start with "Good morning" / "Hey" / "Evening". Lead with the direct answer to the question. The rep is mid-flow and wants the answer, not pleasantries.
+- The heuristic reply is a starting point only — you may borrow real names, numbers, and concrete observations from it, but rewrite the prose, never copy it verbatim, and never repeat the heuristic's filler suggestions (e.g. "use the slack to...").`;
 
   const userPrompt =
     mode === "briefing"
-      ? `Morning briefing. Here's the rep's state:\n\n${summary}\n\nReturn the briefing the rep should read first thing today. Lead with a 1-line headline. Then up to 3 numbered actions, each with the deal name + why it matters. End with one short coaching tip if relevant.`
-      : `The rep asked:\n"${message}"\n\nHere's their state:\n\n${summary}\n\nAnswer the question directly using their data. If the question is vague, pick the most useful interpretation and answer that.\n\nHere is the heuristic reply for reference — feel free to draw from it but improve the tone and reasoning:\n\n"${heuristic.reply}"`;
+      ? `MODE: BRIEFING\n\nRep state:\n\n${summary}\n\nReturn the briefing the rep should read first thing. Start with the greeting + first name. Then up to 3 numbered priorities, each with the deal name + concrete reason (cite the data). If everything is calm, suggest one concrete high-ROI move using a named deal (e.g. a referral call on a recent closed_won).`
+      : `MODE: ASK\n\nThe rep asked:\n"${message}"\n\nRep state:\n\n${summary}\n\nAnswer the question directly. Lead with the answer in the first sentence — no greeting, no preamble. Cite specific deals by name and concrete data points to justify each recommendation.\n\nThe heuristic engine returned the following draft for reference. You may borrow the deals and reasons it identified, but DO NOT copy its prose. Rewrite in your own voice and improve the reasoning:\n\n---\n${heuristic.reply}\n---`;
 
   return geminiText(userPrompt, { system, temperature: 0.4, maxOutputTokens: 700 });
 }
@@ -194,9 +200,28 @@ function morningBriefing(c: Ctx): { reply: string; actions: Action[] } {
     actions.push({ label: "Open task queue", href: "/tasks" });
   }
   if (n === 0) {
+    // Calm pipeline — turn it into a productive coaching moment instead of filler.
     lines.push("You're in good shape — no overdue tasks, no late-stage deals slipping.");
-    lines.push("");
-    lines.push("Use the slack to do one thing that future-you will thank present-you for: send a personal note to a champion in a closed_won deal, or block 30 min to prep for the next demo.");
+    // Find a concrete, named follow-up that actually moves the rep forward.
+    const wonLately = c.myDeals
+      .filter((d) => d.status === "won" && d.closed_at)
+      .sort((a, b) => new Date(b.closed_at!).getTime() - new Date(a.closed_at!).getTime())
+      .slice(0, 1);
+    if (wonLately[0]) {
+      lines.push("");
+      lines.push(`Use the slack to compound: **${wonLately[0].name}** closed recently — a short personal note to that champion is the highest-ROI thing you can do today. Referrals come from people who feel remembered.`);
+      actions.push({ label: `Open ${wonLately[0].name.slice(0, 28)}`, href: `/deals/${wonLately[0].id}` });
+    } else {
+      const stableHigh = openMine
+        .filter((d) => (d.health_score ?? 100) >= 70)
+        .sort((a, b) => b.value_cents - a.value_cents)
+        .slice(0, 1);
+      if (stableHigh[0]) {
+        lines.push("");
+        lines.push(`Lean into momentum: **${stableHigh[0].name}** is healthy and high-value. 15 min of prep beats 30 min of recovery.`);
+        actions.push({ label: `Open ${stableHigh[0].name.slice(0, 28)}`, href: `/deals/${stableHigh[0].id}` });
+      }
+    }
   }
 
   return { reply: lines.join("\n"), actions };
@@ -206,77 +231,54 @@ function answerQuestion(message: string, c: Ctx): { reply: string; actions: Acti
   const q = message.toLowerCase();
   const now = Date.now();
 
-  // Pipeline / forecast questions.
-  if (matches(q, ["pipeline", "forecast", "how am i doing", "how are we doing", "numbers"])) {
-    const openMine = c.myDeals.filter((d) => OPEN_STAGES.includes(d.stage));
-    const open$ = openMine.reduce((a, b) => a + b.value_cents, 0);
-    const weighted = openMine.reduce((a, b) => a + (b.value_cents * b.probability) / 100, 0);
-    const wonClosed = c.myDeals.filter((d) => d.status === "won" || d.status === "lost");
-    const winRate = wonClosed.length ? Math.round((wonClosed.filter((d) => d.status === "won").length / wonClosed.length) * 100) : 0;
-    return {
-      reply: `You have **${openMine.length} open deals** worth ${money$(open$)} in raw pipeline. Weighted by stage probability that's ${money$(weighted)}. Win rate on closed deals: **${winRate}%**.\n\nHonest take: pipeline is fine, what matters this week is the late-stage stuff — that's where dollars actually convert. Open the analytics page for the funnel + forecast cone.`,
-      actions: [
-        { label: "Open analytics", href: "/analytics" },
-        { label: "Open pipeline", href: "/pipeline" },
-      ],
-    };
+  // ────────────────────────────────────────────────────────────────
+  // Order matters: most specific intents first. "today" is too broad
+  // to live in the focus branch — "who should I call today?" used to
+  // accidentally trigger the morning briefing.
+  // ────────────────────────────────────────────────────────────────
+
+  // Call / who to contact — must come before any "today" matcher.
+  if (matches(q, ["call", "who should i call", "who to call", "reach out", "phone"])) {
+    return whoToCall(c);
   }
 
-  // Focus / priorities / today.
-  if (matches(q, ["focus", "today", "priorit", "what should i", "do now", "first"])) {
+  // Risk / at-risk / stuck — also specific.
+  if (matches(q, ["risk", "stuck", "at risk", "slip", "danger", "going to die"])) {
+    return atRisk(c);
+  }
+
+  // Pipeline / forecast questions.
+  if (matches(q, ["pipeline", "forecast", "how am i doing", "how are we doing", "numbers", "quota"])) {
+    return pipelineSummary(c);
+  }
+
+  // Email / draft / write
+  if (matches(q, ["email", "draft", "write a", "reply to"])) {
+    const matchedDeal = c.allDeals.find((d) =>
+      q.includes(d.name.toLowerCase().split(" - ")[0].toLowerCase()) || q.includes(d.name.toLowerCase())
+    );
+    if (matchedDeal) {
+      return {
+        reply: `Open **${matchedDeal.name}** — the email drafter on the right side of the deal page has four intents (follow-up, schedule demo, close, re-engage). Pick one, edit the draft, send. The draft uses the same context I'm reading right now.`,
+        actions: [{ label: `Open ${matchedDeal.name.slice(0, 28)}`, href: `/deals/${matchedDeal.id}` }],
+      };
+    }
+  }
+
+  // Focus / priorities — only triggers on intent words, not on "today" alone.
+  if (matches(q, ["focus", "priorit", "what should i", "do now", "first thing", "where do i start"])) {
     return morningBriefing(c);
   }
 
-  // Risk / at-risk / stuck.
-  if (matches(q, ["risk", "stuck", "at risk", "slip", "danger"])) {
-    const openMine = c.myDeals.filter((d) => OPEN_STAGES.includes(d.stage));
-    const risky = openMine
-      .filter((d) => (d.health_score ?? 100) < 60)
-      .sort((a, b) => (a.health_score ?? 0) - (b.health_score ?? 0))
-      .slice(0, 4);
-    if (risky.length === 0) return { reply: "Nothing flagged at risk right now. Health scores are holding above 60 across your pipeline.", actions: [{ label: "Open pipeline", href: "/pipeline" }] };
-    const lines = ["Four deals I'd watch:", ""];
-    risky.forEach((d, i) => {
-      lines.push(`${i + 1}. **${d.name}** — health ${d.health_score ?? "?"}. ${d.health_reasoning ?? ""}`);
-    });
-    return {
-      reply: lines.join("\n"),
-      actions: risky.slice(0, 2).map((d) => ({ label: d.name.slice(0, 30), href: `/deals/${d.id}` })),
-    };
-  }
-
-  // Call / who to contact.
-  if (matches(q, ["call", "who should i", "who to", "reach out"])) {
-    const openMine = c.myDeals.filter((d) => OPEN_STAGES.includes(d.stage));
-    // Late stage, no activity recently.
-    const byDeal = new Map<string, Activity[]>();
-    for (const a of c.allActs) if (a.deal_id) byDeal.set(a.deal_id, [...(byDeal.get(a.deal_id) ?? []), a]);
-    const cands = openMine
-      .map((d) => {
-        const da = byDeal.get(d.id) ?? [];
-        const last = da[0] ? Math.round((now - new Date(da[0].occurred_at).getTime()) / 86400000) : 999;
-        return { d, last };
-      })
-      .filter((x) => x.last >= 4)
-      .sort((a, b) => b.d.value_cents - a.d.value_cents)
-      .slice(0, 3);
-    if (cands.length === 0) return { reply: "Everyone's been touched recently. Maybe today's the day for a non-deal call — a check-in with a closed_won champion to get a referral.", actions: [] };
-    const lines = ["These three are due for a human touch:", ""];
-    cands.forEach((c, i) => lines.push(`${i + 1}. **${c.d.name}** — ${c.last}d since last activity. ${money$(c.d.value_cents)}.`));
-    return { reply: lines.join("\n"), actions: cands.slice(0, 2).map((c) => ({ label: c.d.name.slice(0, 30), href: `/deals/${c.d.id}` })) };
-  }
-
-  // Help / tip / advice / generic.
-  if (matches(q, ["help", "tip", "advice", "how do i", "coach"])) {
-    return {
-      reply:
-`A coach's tip that compounds: **always book the next step on the call.** Not "I'll send some times" — actually pull up the calendar live and pencil it in.\n\nLook at your pipeline: every deal sitting at demo without a meeting logged probably violated this. The deals that close fastest are the ones where you never let the next-step gap go above 7 days.`,
-      actions: [{ label: "Show me which deals", href: "/pipeline" }],
-    };
+  // Help / tip / advice / generic coaching.
+  if (matches(q, ["tip", "advice", "how do i", "coach me on selling", "coaching"])) {
+    return coachingTip(c);
   }
 
   // Default: try to surface anything matching a deal name in the question.
-  const matchedDeal = c.allDeals.find((d) => q.includes(d.name.toLowerCase().split(" - ")[0].toLowerCase()) || q.includes(d.name.toLowerCase()));
+  const matchedDeal = c.allDeals.find((d) =>
+    q.includes(d.name.toLowerCase().split(" - ")[0].toLowerCase()) || q.includes(d.name.toLowerCase())
+  );
   if (matchedDeal) {
     return {
       reply: `Got it — you want me to coach you on **${matchedDeal.name}**. Open the deal and the "Your coach on this deal" panel at the top has my read. The recommended next step is the punchline.`,
@@ -288,6 +290,164 @@ function answerQuestion(message: string, c: Ctx): { reply: string; actions: Acti
     reply:
 `I can help with these (try one):\n\n- **What should I focus on today?**\n- **How's my pipeline?**\n- **What's at risk?**\n- **Who should I call today?**\n- **Coach me on <deal name>**`,
     actions: [],
+  };
+}
+
+// ── Intent handlers ────────────────────────────────────────────────
+
+function whoToCall(c: Ctx): { reply: string; actions: Action[] } {
+  const now = Date.now();
+  const openMine = c.myDeals.filter((d) => OPEN_STAGES.includes(d.stage));
+
+  const byDeal = new Map<string, Activity[]>();
+  for (const a of c.allActs) if (a.deal_id) byDeal.set(a.deal_id, [...(byDeal.get(a.deal_id) ?? []), a]);
+
+  // Score each open deal on a "call-worthiness" axis. We *always* return
+  // candidates — the call is the rep's lever, the coach picks the best ones.
+  type Cand = { d: Deal; reason: string; priority: number; daysSince: number };
+  const cands: Cand[] = [];
+
+  for (const d of openMine) {
+    const da = byDeal.get(d.id) ?? [];
+    const lastTouch = da[0] ? Math.round((now - new Date(da[0].occurred_at).getTime()) / 86400000) : 999;
+    const emailsOut = da.filter((a) => a.type === "email_sent").length;
+    const emailsIn = da.filter((a) => a.type === "email_received").length;
+
+    // Channel switch — silent email thread, time for a human voice.
+    if (emailsOut >= 2 && emailsIn === 0 && lastTouch >= 3) {
+      cands.push({
+        d,
+        priority: 100 + d.value_cents / 100000,
+        daysSince: lastTouch,
+        reason: `${emailsOut} unanswered emails — switch channel. Email isn't working here.`,
+      });
+      continue;
+    }
+    // Late-stage stall.
+    if ((d.stage === "proposal" || d.stage === "negotiation") && lastTouch >= 4) {
+      cands.push({
+        d,
+        priority: 90 + d.value_cents / 100000,
+        daysSince: lastTouch,
+        reason: `${d.stage} stage, no contact for ${lastTouch}d. Late-stage silence kills deals.`,
+      });
+      continue;
+    }
+    // Close-date crunch.
+    if (d.expected_close_date) {
+      const days = Math.round((new Date(d.expected_close_date).getTime() - now) / 86400000);
+      if (days <= 10 && d.stage !== "negotiation" && d.stage !== "closed_won") {
+        cands.push({
+          d,
+          priority: 80 + d.value_cents / 100000,
+          daysSince: lastTouch,
+          reason: `Close target in ${days}d but still ${d.stage}. Either accelerate or move the date — call drives it.`,
+        });
+        continue;
+      }
+    }
+    // Low health.
+    if ((d.health_score ?? 100) < 55) {
+      cands.push({
+        d,
+        priority: 60 + d.value_cents / 100000,
+        daysSince: lastTouch,
+        reason: `Health ${d.health_score}/100. ${d.health_reasoning ?? "Worth a temperature check."}`,
+      });
+      continue;
+    }
+    // Quiet ≥7d.
+    if (lastTouch >= 7) {
+      cands.push({
+        d,
+        priority: 50 + d.value_cents / 100000,
+        daysSince: lastTouch,
+        reason: `Quiet for ${lastTouch}d. One nudge before the rep gets pulled into a new quarter.`,
+      });
+    }
+  }
+
+  cands.sort((a, b) => b.priority - a.priority);
+  const top = cands.slice(0, 3);
+
+  // If nothing surfaced (rep is genuinely on top of everything), pivot to
+  // referral generation — a recently-won champion is the highest-ROI call.
+  if (top.length === 0) {
+    const wonLately = c.myDeals
+      .filter((d) => d.status === "won" && d.closed_at)
+      .sort((a, b) => new Date(b.closed_at!).getTime() - new Date(a.closed_at!).getTime())
+      .slice(0, 2);
+    if (wonLately.length > 0) {
+      const lines = [
+        "Everyone live in your pipeline has been touched recently — that's a good problem to have.",
+        "",
+        "The smart call today isn't on an open deal, it's a **referral call** to a champion in a recent win:",
+        "",
+      ];
+      wonLately.forEach((d, i) => {
+        lines.push(`${i + 1}. **${d.name}** — ${d.closed_at ? `closed ${Math.round((now - new Date(d.closed_at).getTime()) / 86400000)}d ago` : "recent win"}. Ask who else in their world is feeling the same pain.`);
+      });
+      return { reply: lines.join("\n"), actions: wonLately.slice(0, 2).map((d) => ({ label: d.name.slice(0, 30), href: `/deals/${d.id}` })) };
+    }
+    return {
+      reply: "Pipeline is too quiet for me to pick a call. Either it's genuinely empty (in which case prospect today), or activity isn't being logged. Check the pipeline view and tell me what's actually moving.",
+      actions: [{ label: "Open pipeline", href: "/pipeline" }],
+    };
+  }
+
+  const lines: string[] = [];
+  lines.push(`Three calls, in order:`);
+  lines.push("");
+  top.forEach((x, i) => {
+    lines.push(`${i + 1}. **${x.d.name}** — ${money$(x.d.value_cents)}, ${x.d.stage}. ${x.reason}`);
+  });
+  if (top.length === 1) {
+    lines.push("");
+    lines.push("Only one deal really demands a call today — make it count.");
+  }
+  return {
+    reply: lines.join("\n"),
+    actions: top.slice(0, 3).map((x) => ({ label: x.d.name.slice(0, 30), href: `/deals/${x.d.id}` })),
+  };
+}
+
+function atRisk(c: Ctx): { reply: string; actions: Action[] } {
+  const openMine = c.myDeals.filter((d) => OPEN_STAGES.includes(d.stage));
+  const risky = openMine
+    .filter((d) => (d.health_score ?? 100) < 60)
+    .sort((a, b) => (a.health_score ?? 0) - (b.health_score ?? 0))
+    .slice(0, 4);
+  if (risky.length === 0) return { reply: "Nothing flagged at risk right now. Health scores are holding above 60 across your pipeline.", actions: [{ label: "Open pipeline", href: "/pipeline" }] };
+  const lines = [`${risky.length} deals I'd watch:`, ""];
+  risky.forEach((d, i) => {
+    lines.push(`${i + 1}. **${d.name}** — health ${d.health_score ?? "?"}. ${d.health_reasoning ?? ""}`);
+  });
+  return {
+    reply: lines.join("\n"),
+    actions: risky.slice(0, 3).map((d) => ({ label: d.name.slice(0, 30), href: `/deals/${d.id}` })),
+  };
+}
+
+function pipelineSummary(c: Ctx): { reply: string; actions: Action[] } {
+  const openMine = c.myDeals.filter((d) => OPEN_STAGES.includes(d.stage));
+  const open$ = openMine.reduce((a, b) => a + b.value_cents, 0);
+  const weighted = openMine.reduce((a, b) => a + (b.value_cents * b.probability) / 100, 0);
+  const wonClosed = c.myDeals.filter((d) => d.status === "won" || d.status === "lost");
+  const winRate = wonClosed.length ? Math.round((wonClosed.filter((d) => d.status === "won").length / wonClosed.length) * 100) : 0;
+  return {
+    reply: `You have **${openMine.length} open deals** worth ${money$(open$)} in raw pipeline. Weighted by stage probability that's ${money$(weighted)}. Win rate on closed deals: **${winRate}%**.\n\nHonest take: pipeline is fine, what matters this week is the late-stage stuff — that's where dollars actually convert. Open the analytics page for the funnel + forecast cone.`,
+    actions: [
+      { label: "Open analytics", href: "/analytics" },
+      { label: "Open pipeline", href: "/pipeline" },
+    ],
+  };
+}
+
+function coachingTip(c: Ctx): { reply: string; actions: Action[] } {
+  return {
+    reply:
+`A coach's tip that compounds: **always book the next step on the call.** Not "I'll send some times" — actually pull up the calendar live and pencil it in.\n\nLook at your pipeline: every deal sitting at demo without a meeting logged probably violated this. The deals that close fastest are the ones where you never let the next-step gap go above 7 days.`,
+    actions: [{ label: "Show me which deals", href: "/pipeline" }],
   };
 }
 
