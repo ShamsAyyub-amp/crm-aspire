@@ -45,7 +45,7 @@ export default function NextActions({ baseUrl, ownerId }: { baseUrl: string; own
         </div>
       </div>
       {mocked && (
-        <p className="text-[10px] text-ink-400 mb-2">Heuristic mode — wire ANTHROPIC_API_KEY for live Claude output.</p>
+        <p className="text-2xs text-ink-400 mb-2">Heuristic mode — set GEMINI_API_KEY for live coaching.</p>
       )}
       {loading ? (
         <p className="text-sm text-ink-400">Thinking…</p>

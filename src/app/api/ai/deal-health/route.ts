@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { geminiEnabled, geminiJson } from "@/lib/gemini";
 import type { Activity, Deal } from "@/lib/types";
 
 // POST /api/ai/deal-health  { dealId }
 // Returns { score, reasoning, risks } and writes back to deals row.
-// If ANTHROPIC_API_KEY is set, calls Claude. Otherwise returns a heuristic mock
+// If GEMINI_API_KEY is set, calls Gemini. Otherwise returns a heuristic mock
 // so the demo still feels intelligent.
 
 export async function POST(req: Request) {
@@ -23,9 +24,21 @@ export async function POST(req: Request) {
     .limit(30);
   const activities = (activitiesRaw as Activity[]) ?? [];
 
-  const result = process.env.ANTHROPIC_API_KEY
-    ? await scoreWithClaude(deal as Deal, activities)
-    : scoreHeuristic(deal as Deal, activities);
+  const heuristic = scoreHeuristic(deal as Deal, activities);
+  let result: ScoreResult = heuristic;
+  let mocked = true;
+  let fallback = false;
+
+  if (geminiEnabled()) {
+    const ai = await scoreWithGemini(deal as Deal, activities, heuristic);
+    if (ai) {
+      result = ai;
+      mocked = false;
+    } else {
+      mocked = false;
+      fallback = true;
+    }
+  }
 
   await db
     .from("deals")
@@ -37,7 +50,47 @@ export async function POST(req: Request) {
     })
     .eq("id", dealId);
 
-  return NextResponse.json({ ...result, mocked: !process.env.ANTHROPIC_API_KEY });
+  return NextResponse.json({ ...result, mocked, fallback });
+}
+
+async function scoreWithGemini(deal: Deal, acts: Activity[], heuristic: ScoreResult): Promise<ScoreResult | null> {
+  const ctx = serializeForHealth(deal, acts);
+  const system = `You are an AI sales coach scoring deal health. Output JSON only.
+
+Schema:
+{
+  "score": integer 0-100,
+  "reasoning": "1-2 sentences explaining the score, referencing real signals from the data",
+  "risks": [{"label": "short risk", "severity": "low" | "med" | "high"}]
+}
+
+Rules:
+- Be calibrated: a stage with a known meeting + reply within 5d is usually 75-90; cold long-stalled deal is 20-40.
+- Risks should be specific to this deal's data. Maximum 4.
+- Never invent activity that isn't in the data.`;
+
+  const prompt = `${ctx}\n\nFor reference, the heuristic engine returned:\nscore=${heuristic.score}, reasoning="${heuristic.reasoning}".\nFeel free to disagree if the data supports it. Return the JSON now.`;
+
+  const json = await geminiJson<ScoreResult>(prompt, { system, temperature: 0.2, maxOutputTokens: 500 });
+  if (!json || typeof json.score !== "number") return null;
+  json.score = Math.max(0, Math.min(100, Math.round(json.score)));
+  if (!Array.isArray(json.risks)) json.risks = [];
+  return json;
+}
+
+function serializeForHealth(deal: Deal, acts: Activity[]): string {
+  const lines: string[] = [];
+  lines.push(`Deal: ${deal.name} | stage=${deal.stage} | $${Math.round(deal.value_cents / 100).toLocaleString()} | prob=${deal.probability}% | close=${deal.expected_close_date ?? "—"}`);
+  if (acts.length === 0) {
+    lines.push("Activity: none.");
+    return lines.join("\n");
+  }
+  lines.push("Activity (newest first):");
+  for (const a of acts.slice(0, 12)) {
+    const days = Math.round((Date.now() - new Date(a.occurred_at).getTime()) / 86400000);
+    lines.push(`- ${days}d ago | ${a.type} | ${a.subject ?? ""}${a.body ? ` | ${a.body.slice(0, 120)}` : ""}`);
+  }
+  return lines.join("\n");
 }
 
 type ScoreResult = {
@@ -103,8 +156,3 @@ function scoreHeuristic(deal: Deal, activities: Activity[]): ScoreResult {
   return { score, reasoning, risks };
 }
 
-async function scoreWithClaude(deal: Deal, activities: Activity[]): Promise<ScoreResult> {
-  // Placeholder for the real call. Returning heuristic so the route stays working
-  // without an API key. Swap in @anthropic-ai/sdk and structured output here.
-  return scoreHeuristic(deal, activities);
-}

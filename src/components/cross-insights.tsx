@@ -57,7 +57,7 @@ export default function CrossInsights({ ownerId }: { ownerId: string }) {
         </div>
       </div>
 
-      {mocked && <p className="text-[10px] text-ink-400 mb-2">Heuristic mode — wire ANTHROPIC_API_KEY for live Claude output.</p>}
+      {mocked && <p className="text-2xs text-ink-400 mb-2">Heuristic mode — set GEMINI_API_KEY for live coaching.</p>}
 
       {insights == null ? (
         <p className="text-sm text-ink-400">Looking…</p>

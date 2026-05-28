@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { geminiEnabled, geminiJson } from "@/lib/gemini";
 import { OPEN_STAGES } from "@/lib/types";
 import type { Activity, Deal } from "@/lib/types";
 
@@ -16,14 +17,69 @@ export async function POST(req: Request) {
   const { data: dealsRaw } = await q;
   const deals = (dealsRaw as Deal[]) ?? [];
 
-  if (deals.length === 0) return NextResponse.json({ insights: [], mocked: !process.env.ANTHROPIC_API_KEY });
+  if (deals.length === 0) return NextResponse.json({ insights: [], mocked: !process.env.GEMINI_API_KEY });
 
   const ids = deals.map((d) => d.id);
   const { data: actsRaw } = await db.from("activities").select("*").in("deal_id", ids);
   const acts = (actsRaw as Activity[]) ?? [];
 
-  const out = process.env.ANTHROPIC_API_KEY ? await insightsWithClaude(deals, acts) : insightsHeuristic(deals, acts);
-  return NextResponse.json({ ...out, mocked: !process.env.ANTHROPIC_API_KEY });
+  const heuristic = insightsHeuristic(deals, acts);
+  if (!geminiEnabled()) return NextResponse.json({ ...heuristic, mocked: true });
+
+  const ai = await insightsWithGemini(deals, acts, heuristic);
+  if (!ai) return NextResponse.json({ ...heuristic, mocked: false, fallback: true });
+  return NextResponse.json({ ...ai, mocked: false });
+}
+
+async function insightsWithGemini(
+  deals: Deal[],
+  acts: Activity[],
+  heuristic: { insights: Insight[] }
+): Promise<{ insights: Insight[] } | null> {
+  const ctx = serializeForInsights(deals, acts);
+  const system = `You are an AI sales coach scanning a sales team's pipeline for patterns no individual rep would catch.
+
+Output JSON: {"insights": [{"title": "...", "detail": "...", "evidence": "...", "severity": "low" | "med" | "high", "dealIds": ["..."]}]}
+
+Rules:
+- Maximum 5 insights. Each must reference at least 2 deals.
+- Title: a short pattern statement (e.g. "Compliance gating 3 deals at once").
+- Detail: 1 sentence, manager-level take.
+- Evidence: a brief verbatim quote or condensed phrase from the activity bodies if possible, else a count.
+- Severity: high if a deal could die this week, med if it slips, low if just notable.
+- dealIds: the actual deal id strings from the input, not deal names.
+- Never invent activity. If patterns are weak, return fewer insights — empty array is fine.`;
+
+  const prompt = `${ctx}\n\nFor reference, the heuristic engine found these patterns:\n${heuristic.insights.map((i) => `- ${i.title} (${i.dealIds.length} deals)`).join("\n")}\n\nReturn richer JSON insights now.`;
+
+  const json = await geminiJson<{ insights: Insight[] }>(prompt, { system, temperature: 0.4, maxOutputTokens: 1200 });
+  if (!json || !Array.isArray(json.insights)) return null;
+  // Make sure dealIds reference real deals.
+  const realIds = new Set(deals.map((d) => d.id));
+  for (const i of json.insights) i.dealIds = (i.dealIds || []).filter((id) => realIds.has(id));
+  return json;
+}
+
+function serializeForInsights(deals: Deal[], acts: Activity[]): string {
+  const open = deals.filter((d) => OPEN_STAGES.includes(d.stage));
+  const lines: string[] = [];
+  lines.push(`Open deals: ${open.length} | Closed deals (won/lost): ${deals.filter((d) => d.status !== "open").length}`);
+  lines.push("");
+  lines.push("Open deal summary (id | name | stage | health | days_since_last_activity):");
+  const byDeal = new Map<string, Activity[]>();
+  for (const a of acts) if (a.deal_id) byDeal.set(a.deal_id, [...(byDeal.get(a.deal_id) ?? []), a]);
+  for (const d of open) {
+    const da = byDeal.get(d.id) ?? [];
+    const last = da[0] ? Math.round((Date.now() - new Date(da[0].occurred_at).getTime()) / 86400000) : 999;
+    lines.push(`- ${d.id} | ${d.name} | ${d.stage} | ${d.health_score ?? "—"} | ${last}d`);
+  }
+  lines.push("");
+  lines.push("Recent activity bodies (for keyword/pattern detection):");
+  for (const a of acts.slice(0, 40)) {
+    if (!a.body && !a.subject) continue;
+    lines.push(`- dealId=${a.deal_id} | ${a.type} | ${a.subject ?? ""}${a.body ? ` — ${a.body.slice(0, 160)}` : ""}`);
+  }
+  return lines.join("\n");
 }
 
 type Insight = {
@@ -133,6 +189,3 @@ function insightsHeuristic(deals: Deal[], acts: Activity[]): { insights: Insight
   return { insights: insights.slice(0, 6) };
 }
 
-async function insightsWithClaude(deals: Deal[], acts: Activity[]): Promise<{ insights: Insight[] }> {
-  return insightsHeuristic(deals, acts);
-}

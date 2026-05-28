@@ -213,7 +213,7 @@ function BriefView({ state, onBack, onOpen }: { state: { deal: Result; data: Bri
             <p className="mt-0.5">{state.data.recommendation}</p>
           </div>
           {state.data.mocked && (
-            <p className="text-[10px] text-ink-400">Heuristic mode — wire ANTHROPIC_API_KEY for live Claude output.</p>
+            <p className="text-2xs text-ink-400">Heuristic mode — set GEMINI_API_KEY for live coaching.</p>
           )}
         </div>
       )}

@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const { data: dealsRaw } = await q;
   const deals = (dealsRaw as Deal[]) ?? [];
 
-  if (deals.length === 0) return NextResponse.json({ actions: [], mocked: !process.env.ANTHROPIC_API_KEY });
+  if (deals.length === 0) return NextResponse.json({ actions: [], mocked: !process.env.GEMINI_API_KEY });
 
   const ids = deals.map((d) => d.id);
   const { data: actsRaw } = await db
@@ -107,5 +107,5 @@ export async function POST(req: Request) {
   const sev = { high: 0, med: 1, low: 2 } as const;
   actions.sort((a, b) => sev[a.severity] - sev[b.severity]);
 
-  return NextResponse.json({ actions: actions.slice(0, 8), mocked: !process.env.ANTHROPIC_API_KEY });
+  return NextResponse.json({ actions: actions.slice(0, 8), mocked: !process.env.GEMINI_API_KEY });
 }

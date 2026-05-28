@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { geminiEnabled, geminiJson } from "@/lib/gemini";
 import type { Activity, Company, Contact, Deal, User } from "@/lib/types";
 
 // POST /api/ai/deal-brief  { dealId }
@@ -22,11 +23,79 @@ export async function POST(req: Request) {
   ]);
   const acts = (actsRaw as Activity[]) ?? [];
 
-  const out = process.env.ANTHROPIC_API_KEY
-    ? await briefWithClaude(deal as Deal, company as Company | null, contact as Contact | null, owner as User | null, acts)
-    : briefHeuristic(deal as Deal, company as Company | null, contact as Contact | null, owner as User | null, acts);
+  const heuristic = briefHeuristic(deal as Deal, company as Company | null, contact as Contact | null, owner as User | null, acts);
+  if (!geminiEnabled()) {
+    return NextResponse.json({ ...heuristic, mocked: true });
+  }
+  const ai = await briefWithGemini(deal as Deal, company as Company | null, contact as Contact | null, owner as User | null, acts, heuristic);
+  if (!ai) return NextResponse.json({ ...heuristic, mocked: false, fallback: true });
+  return NextResponse.json({ ...ai, mocked: false });
+}
 
-  return NextResponse.json({ ...out, mocked: !process.env.ANTHROPIC_API_KEY });
+async function briefWithGemini(
+  deal: Deal,
+  company: Company | null,
+  contact: Contact | null,
+  owner: User | null,
+  acts: Activity[],
+  heuristic: Brief
+): Promise<Brief | null> {
+  const ctx = serializeDealContext(deal, company, contact, owner, acts);
+  const system = `You are an AI sales coach analyzing a single deal. Write like a sharp VP of Sales. Be concrete, never fluffy.
+
+Output strict JSON with shape:
+{
+  "headline": "short, 4-7 words, captures the deal state",
+  "brief": "2-3 sentences, factual, references real data only",
+  "signals": ["3-6 short chips like '2 replies', 'last touch 3d ago', 'no meeting at demo stage'"],
+  "recommendation": "1-2 sentences, action-oriented, mentions the next concrete step"
+}
+
+Rules:
+- Never invent activities, contacts, or numbers.
+- If data is missing, say so (e.g. "no recent reply").
+- No preamble, no "as an AI", no sign-off.`;
+
+  const prompt = `${ctx}\n\nReturn the JSON brief now.`;
+  const json = await geminiJson<Brief>(prompt, { system, temperature: 0.3, maxOutputTokens: 600 });
+  if (!json || typeof json.headline !== "string" || typeof json.recommendation !== "string") return null;
+  // Backfill signals from heuristic if model returned an empty array.
+  if (!Array.isArray(json.signals) || json.signals.length === 0) json.signals = heuristic.signals;
+  return json;
+}
+
+function serializeDealContext(
+  deal: Deal,
+  company: Company | null,
+  contact: Contact | null,
+  owner: User | null,
+  acts: Activity[]
+): string {
+  const lines: string[] = [];
+  lines.push(`Deal: ${deal.name}`);
+  lines.push(`Stage: ${deal.stage} | Status: ${deal.status} | Probability: ${deal.probability}%`);
+  lines.push(`Value: $${Math.round(deal.value_cents / 100).toLocaleString()} ${deal.currency}`);
+  if (deal.expected_close_date) lines.push(`Expected close: ${deal.expected_close_date}`);
+  if (deal.source) lines.push(`Source: ${deal.source}`);
+  if (deal.health_score != null) lines.push(`Current health: ${deal.health_score}/100${deal.health_reasoning ? ` — ${deal.health_reasoning}` : ""}`);
+  if (deal.won_lost_reason) lines.push(`Close reason: ${deal.won_lost_reason}`);
+  if (company) lines.push(`Company: ${company.name}${company.industry ? `, ${company.industry}` : ""}${company.employees ? `, ${company.employees.toLocaleString()} employees` : ""}${company.city ? `, ${company.city}` : ""}`);
+  if (contact) lines.push(`Primary contact: ${contact.first_name} ${contact.last_name}${contact.title ? `, ${contact.title}` : ""}${contact.email ? ` <${contact.email}>` : ""}`);
+  if (owner) lines.push(`Deal owner: ${owner.name}`);
+
+  if (acts.length > 0) {
+    lines.push("");
+    lines.push("Recent activity (newest first):");
+    for (const a of acts.slice(0, 12)) {
+      const days = Math.round((Date.now() - new Date(a.occurred_at).getTime()) / 86400000);
+      lines.push(`- ${days}d ago | ${a.type} | ${a.subject ?? "(no subject)"}${a.body ? ` — ${a.body.slice(0, 140)}` : ""}`);
+    }
+  } else {
+    lines.push("");
+    lines.push("Recent activity: none.");
+  }
+
+  return lines.join("\n");
 }
 
 type Brief = { headline: string; brief: string; signals: string[]; recommendation: string };
@@ -113,7 +182,3 @@ function labelType(t: Activity["type"]): string {
   } as const)[t];
 }
 
-async function briefWithClaude(deal: Deal, company: Company | null, contact: Contact | null, owner: User | null, acts: Activity[]): Promise<Brief> {
-  // Placeholder for the real Anthropic call. Heuristic for now so the route works without a key.
-  return briefHeuristic(deal, company, contact, owner, acts);
-}

@@ -67,7 +67,7 @@ export default function DealBrief({ dealId }: { dealId: string }) {
             <p className="text-sm text-ink-700 mt-0.5">{data.recommendation}</p>
           </div>
           {data.mocked && (
-            <p className="text-[10px] text-ink-400">Heuristic mode — wire ANTHROPIC_API_KEY for live Claude output.</p>
+            <p className="text-2xs text-ink-400">Heuristic mode — set GEMINI_API_KEY for live coaching.</p>
           )}
         </div>
       ) : (

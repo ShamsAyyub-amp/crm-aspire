@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { geminiEnabled, geminiText } from "@/lib/gemini";
 import { OPEN_STAGES } from "@/lib/types";
 import type { Activity, Deal, Task, User } from "@/lib/types";
 
@@ -30,16 +31,95 @@ export async function POST(req: Request) {
   const myTasks = ownerId ? allTasks.filter((t) => t.owner_id === ownerId) : allTasks;
 
   const ctx = { me, myDeals, myTasks, allActs, allDeals };
+  const useAi = geminiEnabled();
 
-  if (mode === "briefing" || !message.trim()) {
-    const out = morningBriefing(ctx);
-    return NextResponse.json({ ...out, mocked: !process.env.ANTHROPIC_API_KEY });
+  // Heuristic always computed — used as fallback and to seed the model with
+  // pre-computed action chips (deep-links) the model can't invent itself.
+  const heuristic = mode === "briefing" || !message.trim() ? morningBriefing(ctx) : answerQuestion(message, ctx);
+
+  if (!useAi) {
+    return NextResponse.json({ ...heuristic, mocked: true });
   }
 
-  // Ask mode — pick the closest intent based on keywords. If a real Claude key
-  // is set, the real call would replace this whole block.
-  const out = answerQuestion(message, ctx);
-  return NextResponse.json({ ...out, mocked: !process.env.ANTHROPIC_API_KEY });
+  const aiReply = await coachWithGemini({ ctx, mode: mode === "ask" ? "ask" : "briefing", message, heuristic });
+  if (!aiReply) {
+    return NextResponse.json({ ...heuristic, mocked: false, fallback: true });
+  }
+  return NextResponse.json({ reply: aiReply, actions: heuristic.actions, mocked: false });
+}
+
+async function coachWithGemini(input: {
+  ctx: Ctx;
+  mode: "briefing" | "ask";
+  message: string;
+  heuristic: { reply: string; actions: Action[] };
+}): Promise<string | null> {
+  const { ctx, mode, message, heuristic } = input;
+  const summary = serializeContext(ctx);
+
+  const system = `You are an AI sales coach inside Pipelytics. You speak like a great VP of Sales: direct, practical, never fluffy.
+
+Style rules:
+- Keep replies tight: a punchy headline sentence, then 2-4 short bullets or sentences.
+- Use **bold** for things the rep should do.
+- Reference deal names exactly as given.
+- Never invent deals, contacts, numbers, or activities not in the data.
+- Don't add disclaimers, signatures, or "as an AI" preambles.
+- Don't add follow-up offers like "let me know if you'd like more detail."`;
+
+  const userPrompt =
+    mode === "briefing"
+      ? `Morning briefing. Here's the rep's state:\n\n${summary}\n\nReturn the briefing the rep should read first thing today. Lead with a 1-line headline. Then up to 3 numbered actions, each with the deal name + why it matters. End with one short coaching tip if relevant.`
+      : `The rep asked:\n"${message}"\n\nHere's their state:\n\n${summary}\n\nAnswer the question directly using their data. If the question is vague, pick the most useful interpretation and answer that.\n\nHere is the heuristic reply for reference — feel free to draw from it but improve the tone and reasoning:\n\n"${heuristic.reply}"`;
+
+  return geminiText(userPrompt, { system, temperature: 0.4, maxOutputTokens: 700 });
+}
+
+function serializeContext(ctx: Ctx): string {
+  const lines: string[] = [];
+  const name = ctx.me?.name ?? "Unknown";
+  lines.push(`Rep: ${name} (${ctx.me?.role ?? "rep"})`);
+
+  const openMine = ctx.myDeals.filter((d) => OPEN_STAGES.includes(d.stage));
+  lines.push(`Open deals owned: ${openMine.length}`);
+
+  // Top 10 most relevant deals (highest value or worst health)
+  const ranked = openMine.slice().sort((a, b) => {
+    const ha = a.health_score ?? 100;
+    const hb = b.health_score ?? 100;
+    if (ha !== hb) return ha - hb;
+    return b.value_cents - a.value_cents;
+  });
+  const byId = new Map<string, Activity[]>();
+  for (const a of ctx.allActs) if (a.deal_id) byId.set(a.deal_id, [...(byId.get(a.deal_id) ?? []), a]);
+
+  lines.push("");
+  lines.push("Open deal details (most relevant first):");
+  for (const d of ranked.slice(0, 10)) {
+    const acts = byId.get(d.id) ?? [];
+    const last = acts[0]
+      ? `${Math.round((Date.now() - new Date(acts[0].occurred_at).getTime()) / 86400000)}d ago`
+      : "never";
+    const out = acts.filter((a) => a.type === "email_sent").length;
+    const inb = acts.filter((a) => a.type === "email_received").length;
+    const meet = acts.filter((a) => a.type === "meeting").length;
+    lines.push(
+      `- ${d.name} | stage=${d.stage} | $${Math.round(d.value_cents / 100).toLocaleString()} | prob=${d.probability}% | health=${d.health_score ?? "—"} | close=${d.expected_close_date ?? "—"} | lastTouch=${last} | emails(out/in)=${out}/${inb} | meetings=${meet}${d.health_reasoning ? ` | note: ${d.health_reasoning}` : ""}`
+    );
+  }
+
+  const openTasks = ctx.myTasks.filter((t) => !t.completed_at);
+  if (openTasks.length > 0) {
+    lines.push("");
+    lines.push("Open tasks:");
+    for (const t of openTasks.slice(0, 8)) {
+      const due = t.due_at ? new Date(t.due_at).toLocaleString() : "no due date";
+      const overdue = t.due_at && new Date(t.due_at).getTime() < Date.now() ? " (OVERDUE)" : "";
+      lines.push(`- [${t.priority}] ${t.title} | due ${due}${overdue}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 type Ctx = {

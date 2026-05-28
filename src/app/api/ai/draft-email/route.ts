@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { geminiEnabled, geminiJson } from "@/lib/gemini";
 import type { Activity, Contact, Deal } from "@/lib/types";
 
 // POST /api/ai/draft-email  { dealId, intent? }
@@ -26,11 +27,60 @@ export async function POST(req: Request) {
     .limit(5);
   const lastActs = (lastActsRaw as Activity[]) ?? [];
 
-  const result = process.env.ANTHROPIC_API_KEY
-    ? await draftWithClaude(deal as Deal, contact as Contact | null, lastActs, intent)
-    : draftHeuristic(deal as Deal, contact as Contact | null, lastActs, intent);
+  const heuristic = draftHeuristic(deal as Deal, contact as Contact | null, lastActs, intent);
+  if (!geminiEnabled()) return NextResponse.json({ ...heuristic, mocked: true });
 
-  return NextResponse.json({ ...result, mocked: !process.env.ANTHROPIC_API_KEY });
+  const ai = await draftWithGemini(deal as Deal, contact as Contact | null, lastActs, intent);
+  if (!ai) return NextResponse.json({ ...heuristic, mocked: false, fallback: true });
+  return NextResponse.json({ ...ai, mocked: false });
+}
+
+async function draftWithGemini(
+  deal: Deal,
+  contact: Contact | null,
+  lastActs: Activity[],
+  intent: string
+): Promise<DraftResult | null> {
+  const ctx = serializeForDraft(deal, contact, lastActs);
+  const intentMap: Record<string, string> = {
+    follow_up: "Follow up after recent activity. Two-sentence opener referencing the last touch, then offer one specific next-step move.",
+    schedule_demo: "Offer a 25-minute demo, propose 3 specific time slots, and reference one pain we can solve.",
+    close: "Move to close. Summarize the remaining items as a short numbered list. Ask for a Friday decision.",
+    re_engage: "Re-engage a deal that's gone quiet. Offer a 'park or keep going' fork — make it easy to say no.",
+  };
+  const intentBrief = intentMap[intent] ?? intentMap.follow_up;
+
+  const system = `You are an AI sales coach drafting an email a sales rep would actually send.
+
+Style rules:
+- Conversational, not corporate. No "I hope this email finds you well."
+- Subject lines are 4-8 words, lowercase first letter, no hype.
+- Body opens with "Hi <FirstName>," then 1 short paragraph + 1-3 short lines, end with "Best,".
+- Total body length: 60-120 words.
+- Never invent facts. Reference real activity/context only.
+
+Output JSON: {"subject": "...", "body": "..."}`;
+
+  const prompt = `${ctx}\n\nIntent for this email: ${intentBrief}\n\nDraft the email now as JSON.`;
+  const json = await geminiJson<DraftResult>(prompt, { system, temperature: 0.6, maxOutputTokens: 500 });
+  if (!json || typeof json.subject !== "string" || typeof json.body !== "string") return null;
+  return json;
+}
+
+function serializeForDraft(deal: Deal, contact: Contact | null, lastActs: Activity[]): string {
+  const lines: string[] = [];
+  lines.push(`Deal: ${deal.name} | stage=${deal.stage} | $${Math.round(deal.value_cents / 100).toLocaleString()}`);
+  if (contact) lines.push(`Recipient: ${contact.first_name} ${contact.last_name}${contact.title ? `, ${contact.title}` : ""}${contact.email ? ` <${contact.email}>` : ""}`);
+  if (lastActs.length === 0) {
+    lines.push("Recent activity: none.");
+    return lines.join("\n");
+  }
+  lines.push("Last 5 activities (newest first):");
+  for (const a of lastActs.slice(0, 5)) {
+    const days = Math.round((Date.now() - new Date(a.occurred_at).getTime()) / 86400000);
+    lines.push(`- ${days}d ago | ${a.type} | ${a.subject ?? ""}${a.body ? ` — ${a.body.slice(0, 140)}` : ""}`);
+  }
+  return lines.join("\n");
 }
 
 type DraftResult = { subject: string; body: string };
@@ -107,12 +157,3 @@ Best,`,
   };
 }
 
-async function draftWithClaude(
-  deal: Deal,
-  contact: Contact | null,
-  lastActs: Activity[],
-  intent: string
-): Promise<DraftResult> {
-  // Placeholder. Swap in Anthropic SDK and feed the activity history.
-  return draftHeuristic(deal, contact, lastActs, intent);
-}

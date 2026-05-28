@@ -128,7 +128,7 @@ function Bubble({ turn }: { turn: Turn }) {
           </div>
         )}
         {turn.mocked && (
-          <div className="text-[10px] text-ink-400 mt-1">Heuristic mode — wire ANTHROPIC_API_KEY for live Claude coaching.</div>
+          <div className="text-2xs text-ink-400 mt-1">Heuristic mode — set GEMINI_API_KEY in Vercel for live coaching.</div>
         )}
       </div>
     </div>

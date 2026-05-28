@@ -3,29 +3,110 @@
 @tailwind utilities;
 
 html, body { height: 100%; }
+
 body {
   @apply bg-ink-50 text-ink-900 antialiased;
-  font-feature-settings: "cv11", "ss01";
+  font-feature-settings: "cv11", "ss01", "ss03";
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-.card { @apply bg-white border border-ink-100 rounded-lg; }
-.btn { @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition; }
-.btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700; }
-.btn-secondary { @apply btn bg-white border border-ink-200 text-ink-800 hover:bg-ink-50; }
-.btn-ghost { @apply btn text-ink-700 hover:bg-ink-100; }
-.chip { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium; }
-.input { @apply w-full px-3 py-1.5 rounded-md border border-ink-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500; }
-.kbd { @apply inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border border-ink-200 bg-ink-50 text-ink-600; }
+/* Subtle gradient background that gives the app a more premium feel without distracting from content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(1100px 540px at 95% -10%, rgba(99, 102, 241, 0.07), transparent 60%),
+    radial-gradient(900px 480px at -10% 110%, rgba(99, 102, 241, 0.05), transparent 60%);
+  pointer-events: none;
+}
 
+::selection { @apply bg-brand-200/60 text-brand-900; }
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Components */
+
+.card {
+  @apply bg-white border border-ink-150 rounded-xl shadow-card;
+}
+.card-elevated {
+  @apply bg-white border border-ink-150 rounded-xl shadow-elevated;
+}
+.card-hover {
+  @apply transition-all duration-150 hover:shadow-card-hover hover:border-ink-200;
+}
+
+.btn {
+  @apply inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 select-none;
+}
+.btn-primary {
+  @apply btn text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 shadow-sm;
+}
+.btn-secondary {
+  @apply btn bg-white border border-ink-200 text-ink-800 hover:bg-ink-50 hover:border-ink-300 active:bg-ink-100;
+}
+.btn-ghost {
+  @apply btn text-ink-700 hover:bg-ink-100 active:bg-ink-150;
+}
+.btn-danger {
+  @apply btn bg-danger-600 text-white hover:bg-danger-700;
+}
+
+.chip {
+  @apply inline-flex items-center px-2 py-0.5 rounded-md text-2xs font-medium tracking-wide leading-4;
+}
+
+.input {
+  @apply w-full px-3 py-2 rounded-lg border border-ink-200 bg-white text-sm
+         text-ink-900 placeholder:text-ink-400
+         focus:outline-none focus:ring-2 focus:ring-brand-500/25 focus:border-brand-500
+         transition-shadow duration-150;
+}
+
+.kbd {
+  @apply inline-flex items-center justify-center min-w-[18px] px-1.5 py-0.5 text-[10px] font-medium
+         rounded border border-ink-200 bg-ink-50 text-ink-600 leading-none;
+}
+
+/* Section heading */
+.section-heading {
+  @apply text-xs font-semibold uppercase tracking-wider text-ink-500;
+}
+
+/* Heat-tone helpers */
+.dot { @apply inline-block w-1.5 h-1.5 rounded-full; }
+.dot-high { @apply dot bg-danger-500; }
+.dot-med { @apply dot bg-warn-500; }
+.dot-low { @apply dot bg-success-500; }
+
+/* Skeleton for loading states */
+.skeleton {
+  background: linear-gradient(90deg, #eff1f5 0%, #e5e8ee 50%, #eff1f5 100%);
+  background-size: 200% 100%;
+  @apply animate-shimmer rounded-md;
+}
+
+/* Animations */
+.animate-in { animation: slide-in 220ms cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes slide-in {
-  from { transform: translateY(8px); opacity: 0; }
+  from { transform: translateY(6px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
-.animate-in { animation: slide-in 180ms ease-out; }
 
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(244,63,94,0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(244,63,94,0); }
-  100% { box-shadow: 0 0 0 0 rgba(244,63,94,0); }
+  0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(244, 63, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
 }
 .stuck-glow { animation: pulse-ring 1.8s infinite; }
+
+/* Scrollbar polish (Webkit) */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { @apply bg-ink-200 rounded-full border-2 border-transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { @apply bg-ink-300; }
