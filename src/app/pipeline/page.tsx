@@ -22,7 +22,8 @@ export default async function Pipeline() {
     <div className="space-y-5">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pipeline</h1>
+          <div className="eyebrow mb-1.5">The Board</div>
+          <h1 className="display-headline text-ink-900 text-4xl">Pipeline</h1>
           <p className="text-sm text-ink-500">Move deals between stages. Health and weighted value update live.</p>
         </div>
       </div>

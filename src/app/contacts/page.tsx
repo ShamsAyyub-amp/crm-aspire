@@ -19,7 +19,8 @@ export default async function Contacts() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
+        <div className="eyebrow mb-1.5">The Rolodex</div>
+        <h1 className="display-headline text-ink-900 text-4xl">Contacts</h1>
         <p className="text-sm text-ink-500">{contacts.length} contacts.</p>
       </div>
       <div className="card overflow-hidden">

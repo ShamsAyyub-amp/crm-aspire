@@ -21,7 +21,8 @@ export default async function Companies() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Companies</h1>
+        <div className="eyebrow mb-1.5">The Directory</div>
+        <h1 className="display-headline text-ink-900 text-4xl">Companies</h1>
         <p className="text-sm text-ink-500">{companies.length} companies.</p>
       </div>
       <div className="card overflow-hidden">

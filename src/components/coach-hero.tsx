@@ -47,94 +47,113 @@ export default function CoachHero({ ownerId }: { ownerId: string }) {
   const mocked = brief?.mocked || answer?.mocked;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-brand-200/60 bg-gradient-to-br from-brand-50 via-white to-brand-50/40 shadow-card">
+    <section className="relative overflow-hidden border-y-2 border-ink-900 bg-ink-50/95 animate-in">
       <div
         aria-hidden
-        className="absolute -top-32 -right-20 w-96 h-96 rounded-full bg-gradient-to-br from-brand-300/30 to-transparent blur-3xl pointer-events-none"
+        className="absolute -top-20 right-0 w-[420px] h-[420px] rounded-full bg-brand-400/12 blur-3xl pointer-events-none"
       />
-      <div className="relative p-6">
-        <div className="flex items-start gap-4">
-          <span className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white text-sm font-bold flex items-center justify-center shrink-0 shadow-md">
-            AI
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base font-semibold text-ink-900">Your sales coach</h2>
-              <span className="chip bg-brand-100/70 text-brand-700">briefing · just now</span>
-              <Link href="/coach" className="ml-auto text-xs font-medium text-brand-600 hover:text-brand-700 hover:underline">
-                Open full chat →
-              </Link>
-            </div>
 
-            <div className="mt-3 text-sm text-ink-700 whitespace-pre-wrap leading-relaxed">
-              {loading || !brief ? (
-                <BriefSkeleton />
-              ) : (
+      {/* Masthead row */}
+      <div className="relative px-6 pt-5 flex items-center justify-between">
+        <span className="eyebrow">Vol. I · Briefing · Just now</span>
+        <Link href="/coach" className="eyebrow text-ink-500 hover:text-brand-700 transition-colors">
+          Full chat →
+        </Link>
+      </div>
+
+      <div className="relative px-6 pt-3 pb-6 grid grid-cols-12 gap-6">
+        {/* Left column: title block */}
+        <div className="col-span-12 md:col-span-4">
+          <div className="display-italic text-brand-600 text-base mb-1">
+            from your coach
+          </div>
+          <h1
+            className="display-headline text-ink-900 text-[2.6rem] md:text-[2.9rem] leading-[0.95]"
+            style={{ fontVariationSettings: "'opsz' 144, 'wght' 480, 'SOFT' 50, 'WONK' 1" }}
+          >
+            Today's <span className="display-italic text-brand-700">play</span>.
+          </h1>
+          <div className="mt-3 hairline-strong w-12" />
+          <p className="text-2xs text-ink-500 mt-3 font-mono uppercase tracking-editorial">
+            Read in 30 seconds.
+          </p>
+        </div>
+
+        {/* Right column: the briefing body */}
+        <div className="col-span-12 md:col-span-8 md:border-l md:border-ink-200 md:pl-6">
+          <div className="text-[15px] text-ink-800 leading-[1.65]">
+            {loading || !brief ? (
+              <BriefSkeleton />
+            ) : (
+              <div className="drop-cap">
                 <Markdown text={brief.reply} />
-              )}
-            </div>
-
-            {brief && brief.actions && brief.actions.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {brief.actions.map((a, i) => (
-                  <Link
-                    key={i}
-                    href={a.href}
-                    className="text-xs px-3 py-1 rounded-full bg-brand-600 text-white hover:bg-brand-700 transition-colors shadow-sm"
-                  >
-                    {a.label} →
-                  </Link>
-                ))}
               </div>
-            )}
-
-            <div className="mt-5 flex items-center gap-2">
-              <input
-                className="input text-sm flex-1 bg-white/70 backdrop-blur"
-                placeholder="Ask your coach anything…"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), ask())}
-                disabled={asking}
-              />
-              <button className="btn-primary" disabled={asking || !draft.trim()} onClick={ask}>
-                {asking ? "Thinking…" : "Ask"}
-              </button>
-            </div>
-
-            {(asking || answer) && (
-              <div className="mt-3 bg-white border border-ink-150 rounded-xl p-4 shadow-sm animate-in">
-                {asking && !answer ? (
-                  <div className="text-sm text-ink-400">Coach is thinking…</div>
-                ) : answer ? (
-                  <>
-                    <div className="text-sm text-ink-700 whitespace-pre-wrap leading-relaxed">
-                      <Markdown text={answer.reply} />
-                    </div>
-                    {answer.actions && answer.actions.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-3">
-                        {answer.actions.map((a, i) => (
-                          <Link
-                            key={i}
-                            href={a.href}
-                            className="text-xs px-3 py-1 rounded-full bg-brand-50 text-brand-700 hover:bg-brand-100 transition-colors"
-                          >
-                            {a.label} →
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : null}
-              </div>
-            )}
-
-            {mocked && (
-              <p className="text-2xs text-ink-400 mt-3">
-                Heuristic mode — set <code className="font-mono">GEMINI_API_KEY</code> in Vercel for live coaching.
-              </p>
             )}
           </div>
+
+          {brief && brief.actions && brief.actions.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-4 pt-4 hairline">
+              {brief.actions.map((a, i) => (
+                <Link
+                  key={i}
+                  href={a.href}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-sm border border-ink-900 bg-ink-900 text-ink-50 hover:bg-brand-700 hover:border-brand-700 transition-colors font-medium"
+                >
+                  <span className="eyebrow text-ink-50/70 mr-1">{String(i + 1).padStart(2, "0")}</span>
+                  <span>{a.label}</span>
+                  <span>→</span>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-5 flex items-stretch gap-2">
+            <input
+              className="input text-sm flex-1 bg-ink-50 border-ink-300"
+              placeholder="Ask your coach anything…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), ask())}
+              disabled={asking}
+            />
+            <button className="btn-primary" disabled={asking || !draft.trim()} onClick={ask}>
+              {asking ? "Thinking…" : "Ask"}
+            </button>
+          </div>
+
+          {(asking || answer) && (
+            <div className="mt-4 border-l-2 border-brand-500 pl-4 animate-in">
+              {asking && !answer ? (
+                <div className="text-sm text-ink-400 italic">The coach is thinking…</div>
+              ) : answer ? (
+                <>
+                  <div className="eyebrow text-ink-500 mb-1.5">Answer</div>
+                  <div className="text-sm text-ink-800 whitespace-pre-wrap leading-[1.65]">
+                    <Markdown text={answer.reply} />
+                  </div>
+                  {answer.actions && answer.actions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {answer.actions.map((a, i) => (
+                        <Link
+                          key={i}
+                          href={a.href}
+                          className="text-xs px-2.5 py-1 rounded-sm border border-ink-200 text-ink-700 hover:border-brand-500 hover:text-brand-700 transition-colors"
+                        >
+                          {a.label} →
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          )}
+
+          {mocked && (
+            <p className="text-2xs text-ink-400 italic mt-4">
+              Heuristic mode — set <span className="font-mono not-italic">GEMINI_API_KEY</span> in Vercel for live coaching.
+            </p>
+          )}
         </div>
       </div>
     </section>
@@ -143,24 +162,26 @@ export default function CoachHero({ ownerId }: { ownerId: string }) {
 
 function BriefSkeleton() {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5 pt-1">
       <div className="skeleton h-3 w-1/2" />
       <div className="skeleton h-3 w-full" />
       <div className="skeleton h-3 w-11/12" />
+      <div className="skeleton h-3 w-9/12" />
       <div className="skeleton h-3 w-3/4" />
     </div>
   );
 }
 
 function Markdown({ text }: { text: string }) {
+  // Render **bold** as italic Fraunces emphasis — editorial style replaces bold sans with italic serif.
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return (
     <>
       {parts.map((p, i) =>
         p.startsWith("**") && p.endsWith("**") ? (
-          <strong key={i} className="font-semibold text-ink-900">
+          <em key={i} className="serif-em not-italic text-ink-900" style={{ fontStyle: "italic" }}>
             {p.slice(2, -2)}
-          </strong>
+          </em>
         ) : (
           <span key={i}>{p}</span>
         )

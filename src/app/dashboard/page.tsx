@@ -84,14 +84,21 @@ export default async function Dashboard() {
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Hey" : "Evening";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7 stagger">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {greet}, {firstName}.
+          <div className="eyebrow mb-2">The Daily Edition</div>
+          <h1
+            className="display-headline text-ink-900 text-4xl md:text-5xl"
+            style={{ fontVariationSettings: "'opsz' 144, 'wght' 540, 'SOFT' 30, 'WONK' 1" }}
+          >
+            {greet}, <span className="display-italic text-brand-700">{firstName}</span>.
           </h1>
-          <p className="text-sm text-ink-500">
-            Your day, your pipeline, your coach. <Link href="/analytics" className="text-brand-600 hover:underline">Team view →</Link>
+          <p className="text-sm text-ink-500 mt-2">
+            Your day, your pipeline, your coach.{" "}
+            <Link href="/analytics" className="text-brand-700 hover:text-brand-800 underline decoration-ink-300 hover:decoration-brand-600 underline-offset-4">
+              Team view →
+            </Link>
           </p>
         </div>
       </div>
@@ -113,7 +120,7 @@ export default async function Dashboard() {
 
           <section className="card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-ink-700">My pipeline by stage</h2>
+              <h2 className="section-heading">My pipeline by stage</h2>
               <Link href="/pipeline" className="text-xs text-brand-600 hover:underline">Open pipeline →</Link>
             </div>
             {myByStage.every((s) => s.count === 0) ? (
@@ -139,7 +146,7 @@ export default async function Dashboard() {
           </section>
 
           <section className="card p-5">
-            <h2 className="text-sm font-semibold text-ink-700 mb-4">My recent activity</h2>
+            <h2 className="section-heading mb-4">My recent activity</h2>
             {myActivities.length === 0 ? (
               <p className="text-sm text-ink-400">No activity in the last few days. Time to log something.</p>
             ) : (
@@ -165,7 +172,7 @@ export default async function Dashboard() {
           <QuotaWidget quotas={myQuotas} users={users} deals={myDeals} />
 
           <section className="card p-5">
-            <h2 className="text-sm font-semibold text-ink-700 mb-3">My at-risk deals</h2>
+            <h2 className="section-heading mb-3">My at-risk deals</h2>
             {myOpen.filter((d) => (d.health_score ?? 100) < 60).length === 0 ? (
               <p className="text-sm text-ink-400">Nothing flagged. Your coach is happy.</p>
             ) : (
@@ -199,7 +206,7 @@ function MyDay({ overdue, dueToday, myDeals }: { overdue: Task[]; dueToday: Task
   return (
     <section className="card p-5 border-l-4 border-l-amber-400">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-ink-700">Today</h2>
+        <h2 className="section-heading">Today's Queue</h2>
         <Link href="/tasks" className="text-xs text-brand-600 hover:underline">All tasks →</Link>
       </div>
       {items.length === 0 ? (
@@ -244,14 +251,16 @@ function Kpi({
   href?: string;
 }) {
   const inner = (
-    <div className="card p-4 h-full">
-      <div className="text-xs text-ink-500">{label}</div>
-      <div className={`text-xl font-semibold mt-1 ${tone === "warn" ? "text-amber-600" : ""}`}>{value}</div>
-      {hint && <div className="text-[11px] text-ink-400 mt-0.5">{hint}</div>}
+    <div className="card card-hover p-4 h-full">
+      <div className="eyebrow-ink">{label}</div>
+      <div className={`ticker text-2xl mt-2 text-ink-900 ${tone === "warn" ? "text-warn-600" : ""}`}>
+        {value}
+      </div>
+      {hint && <div className="text-2xs text-ink-500 mt-1 italic">{hint}</div>}
     </div>
   );
   return href ? (
-    <Link href={href} className="block hover:opacity-90 transition-opacity">
+    <Link href={href} className="block">
       {inner}
     </Link>
   ) : (

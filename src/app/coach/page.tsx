@@ -8,7 +8,10 @@ export default async function CoachPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Sales Coach</h1>
+        <div className="eyebrow mb-1.5">The Coaching Desk</div>
+        <h1 className="display-headline text-ink-900 text-4xl">
+          Your <span className="display-italic text-brand-700">sales coach</span>
+        </h1>
         <p className="text-sm text-ink-500">
           The manager you wish you had. Knows your pipeline, your activity, the deals slipping, and the next thing
           worth doing.

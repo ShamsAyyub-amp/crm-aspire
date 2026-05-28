@@ -111,7 +111,8 @@ export default async function Analytics() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Team analytics</h1>
+        <div className="eyebrow mb-1.5">The Manager Desk</div>
+        <h1 className="display-headline text-ink-900 text-4xl">Team analytics</h1>
         <p className="text-sm text-ink-500">Manager view — where the team is winning, where it's leaking, what's coming next.</p>
       </div>
 

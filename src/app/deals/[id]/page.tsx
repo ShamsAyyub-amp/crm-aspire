@@ -40,10 +40,12 @@ export default async function DealDetail({ params }: { params: Promise<{ id: str
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Link href="/pipeline" className="text-xs text-brand-600 hover:underline">← Pipeline</Link>
-          <h1 className="text-2xl font-semibold tracking-tight mt-1">{deal.name}</h1>
-          <div className="text-sm text-ink-500 mt-0.5">
-            {company?.name ?? "—"} · {owner?.name ?? "Unassigned"}
+          <Link href="/pipeline" className="eyebrow text-ink-500 hover:text-brand-700">← Pipeline</Link>
+          <h1 className="display-headline text-ink-900 text-4xl mt-2">{deal.name}</h1>
+          <div className="text-sm text-ink-500 mt-1.5">
+            <span className="serif-em">{company?.name ?? "—"}</span>
+            <span className="mx-2 text-ink-300">·</span>
+            {owner?.name ?? "Unassigned"}
           </div>
         </div>
         <div className="flex gap-2">

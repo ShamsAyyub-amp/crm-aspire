@@ -28,7 +28,8 @@ export default async function SequencesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Sequences</h1>
+        <div className="eyebrow mb-1.5">The Cadence</div>
+        <h1 className="display-headline text-ink-900 text-4xl">Sequences</h1>
         <p className="text-sm text-ink-500">
           Multi-step outreach. Replies auto-pause the sequence so reps don't spam after a hand-raise.
         </p>

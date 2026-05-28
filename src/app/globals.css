@@ -6,76 +6,137 @@ html, body { height: 100%; }
 
 body {
   @apply bg-ink-50 text-ink-900 antialiased;
-  font-feature-settings: "cv11", "ss01", "ss03";
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv01", "cv11";
 }
 
-/* Subtle gradient background that gives the app a more premium feel without distracting from content. */
+/* Atmospheric paper grain — subtle, never distracting. */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
-  background:
-    radial-gradient(1100px 540px at 95% -10%, rgba(99, 102, 241, 0.07), transparent 60%),
-    radial-gradient(900px 480px at -10% 110%, rgba(99, 102, 241, 0.05), transparent 60%);
   pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(900px 540px at 100% -10%, rgba(200, 84, 40, 0.06), transparent 60%),
+    radial-gradient(720px 480px at -10% 100%, rgba(22, 17, 13, 0.05), transparent 60%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.086  0 0 0 0 0.066  0 0 0 0 0.05  0 0 0 0.045 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-blend-mode: multiply, multiply, normal;
 }
 
-::selection { @apply bg-brand-200/60 text-brand-900; }
+::selection { @apply bg-brand-200/70 text-brand-900; }
 
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Components */
+/* ─────────────────────────── Components ─────────────────────────── */
 
 .card {
-  @apply bg-white border border-ink-150 rounded-xl shadow-card;
-}
-.card-elevated {
-  @apply bg-white border border-ink-150 rounded-xl shadow-elevated;
+  @apply bg-ink-50/95 border border-ink-200 rounded-md shadow-card backdrop-blur-[2px];
 }
 .card-hover {
-  @apply transition-all duration-150 hover:shadow-card-hover hover:border-ink-200;
+  @apply transition-all duration-200 hover:shadow-card-hover hover:border-brand-300;
+}
+.card-elevated {
+  @apply bg-ink-50/95 border border-ink-200 rounded-md shadow-elevated;
 }
 
+/* Buttons — sharper geometry, ember accent, no gradients. */
 .btn {
-  @apply inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 select-none;
+  @apply inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium tracking-tight
+         transition-all duration-150 select-none;
 }
 .btn-primary {
-  @apply btn text-white bg-brand-600 hover:bg-brand-700 active:bg-brand-800 shadow-sm;
+  @apply btn text-ink-50 bg-ink-900 hover:bg-brand-700 active:bg-brand-800 shadow-sm;
 }
 .btn-secondary {
-  @apply btn bg-white border border-ink-200 text-ink-800 hover:bg-ink-50 hover:border-ink-300 active:bg-ink-100;
+  @apply btn bg-ink-50 border border-ink-300 text-ink-800 hover:border-ink-500 hover:bg-ink-100;
 }
 .btn-ghost {
   @apply btn text-ink-700 hover:bg-ink-100 active:bg-ink-150;
 }
 .btn-danger {
-  @apply btn bg-danger-600 text-white hover:bg-danger-700;
+  @apply btn bg-danger-600 text-ink-50 hover:bg-danger-700;
 }
 
 .chip {
-  @apply inline-flex items-center px-2 py-0.5 rounded-md text-2xs font-medium tracking-wide leading-4;
+  @apply inline-flex items-center px-2 py-0.5 rounded-sm text-2xs font-medium tracking-wide leading-4
+         font-mono uppercase;
 }
 
 .input {
-  @apply w-full px-3 py-2 rounded-lg border border-ink-200 bg-white text-sm
-         text-ink-900 placeholder:text-ink-400
+  @apply w-full px-3 py-2 rounded-md border border-ink-300 bg-ink-50/80 text-sm text-ink-900
+         placeholder:text-ink-400
          focus:outline-none focus:ring-2 focus:ring-brand-500/25 focus:border-brand-500
          transition-shadow duration-150;
 }
 
 .kbd {
-  @apply inline-flex items-center justify-center min-w-[18px] px-1.5 py-0.5 text-[10px] font-medium
-         rounded border border-ink-200 bg-ink-50 text-ink-600 leading-none;
+  @apply inline-flex items-center justify-center min-w-[18px] px-1.5 py-0.5 text-[10px] font-medium font-mono
+         rounded border border-ink-200 bg-ink-100 text-ink-600 leading-none;
 }
 
-/* Section heading */
+/* ────────────────────────── Editorial chrome ────────────────────── */
+
+.eyebrow {
+  @apply font-mono uppercase text-2xs tracking-editorial text-brand-600;
+}
+.eyebrow-ink {
+  @apply font-mono uppercase text-2xs tracking-editorial text-ink-500;
+}
+
+.hairline {
+  @apply border-t border-ink-200;
+}
+.hairline-strong {
+  @apply border-t border-ink-300;
+}
+
+.display-headline {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-variation-settings: "opsz" 144, "wght" 500, "SOFT" 0, "WONK" 0;
+  letter-spacing: -0.012em;
+  line-height: 1.05;
+}
+
+.display-italic {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-variation-settings: "opsz" 144, "wght" 400;
+  letter-spacing: -0.01em;
+}
+
+.serif-em {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-style: italic;
+  font-variation-settings: "opsz" 14, "wght" 500;
+}
+
+/* Drop cap for the lead paragraph in editorial cards (e.g. coach briefing). */
+.drop-cap::first-letter {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-variation-settings: "opsz" 144, "wght" 600;
+  font-style: italic;
+  float: left;
+  font-size: 3.25em;
+  line-height: 0.88;
+  margin: 0.06em 0.12em 0 -0.04em;
+  color: theme("colors.brand.700");
+}
+
+/* Numeric tickers use mono with tabular features so they line up like a stock board. */
+.ticker {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum", "zero";
+}
+
+/* Section heading utility — replaces ad-hoc h2 styling. */
 .section-heading {
-  @apply text-xs font-semibold uppercase tracking-wider text-ink-500;
+  @apply eyebrow-ink;
 }
 
 /* Heat-tone helpers */
@@ -84,28 +145,34 @@ body::before {
 .dot-med { @apply dot bg-warn-500; }
 .dot-low { @apply dot bg-success-500; }
 
-/* Skeleton for loading states */
+/* ────────────────────────── Loading + motion ──────────────────────── */
+
 .skeleton {
-  background: linear-gradient(90deg, #eff1f5 0%, #e5e8ee 50%, #eff1f5 100%);
+  background: linear-gradient(90deg, theme("colors.ink.100") 0%, theme("colors.ink.150") 50%, theme("colors.ink.100") 100%);
   background-size: 200% 100%;
-  @apply animate-shimmer rounded-md;
+  @apply animate-shimmer rounded-sm;
 }
 
-/* Animations */
-.animate-in { animation: slide-in 220ms cubic-bezier(0.16, 1, 0.3, 1); }
-@keyframes slide-in {
-  from { transform: translateY(6px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
+.animate-in { animation: fade-up 540ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+.stagger > * { animation: fade-up 620ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.stagger > *:nth-child(1) { animation-delay: 60ms; }
+.stagger > *:nth-child(2) { animation-delay: 140ms; }
+.stagger > *:nth-child(3) { animation-delay: 220ms; }
+.stagger > *:nth-child(4) { animation-delay: 300ms; }
+.stagger > *:nth-child(5) { animation-delay: 380ms; }
+.stagger > *:nth-child(6) { animation-delay: 460ms; }
+.stagger > *:nth-child(7) { animation-delay: 540ms; }
+.stagger > *:nth-child(n+8) { animation-delay: 620ms; }
 
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(244, 63, 94, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(155, 44, 44, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(155, 44, 44, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(155, 44, 44, 0); }
 }
 .stuck-glow { animation: pulse-ring 1.8s infinite; }
 
-/* Scrollbar polish (Webkit) */
+/* ────────────────────────── Scrollbar polish ──────────────────────── */
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { @apply bg-ink-200 rounded-full border-2 border-transparent; background-clip: padding-box; }

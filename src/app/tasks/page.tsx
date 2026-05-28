@@ -35,7 +35,8 @@ export default async function TasksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
+        <div className="eyebrow mb-1.5">The Queue</div>
+        <h1 className="display-headline text-ink-900 text-4xl">Tasks</h1>
         <p className="text-sm text-ink-500">Your queue, sorted by what's at risk of slipping.</p>
       </div>
 

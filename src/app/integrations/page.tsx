@@ -106,7 +106,8 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
+        <div className="eyebrow mb-1.5">The Wire</div>
+        <h1 className="display-headline text-ink-900 text-4xl">Integrations</h1>
         <p className="text-sm text-ink-500">
           {connected.length} connected · {available.length} available. Connections shown are demo state for v1; toggle real keys in env vars to wire them live.
         </p>
