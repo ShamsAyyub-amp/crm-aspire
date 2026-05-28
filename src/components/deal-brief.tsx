@@ -38,14 +38,14 @@ export default function DealBrief({ dealId }: { dealId: string }) {
       <div className="flex items-start gap-2">
         <span className="chip bg-brand-50 text-brand-700 shrink-0">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-500 mr-1.5" />
-          Claude briefing
+          Your coach on this deal
         </span>
         <button
           className="ml-auto text-xs text-brand-600 hover:underline disabled:text-ink-400"
           onClick={load}
           disabled={refreshing}
         >
-          {refreshing ? "Re-briefing…" : "Re-brief"}
+          {refreshing ? "Re-coaching…" : "Refresh"}
         </button>
       </div>
 

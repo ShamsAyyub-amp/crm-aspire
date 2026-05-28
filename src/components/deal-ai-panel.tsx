@@ -63,7 +63,7 @@ export default function DealAiPanel({ deal, contactEmail }: { deal: Deal; contac
   return (
     <section className="card p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-ink-700">Claude on this deal</h2>
+        <h2 className="text-sm font-semibold text-ink-700">Coach: health & next email</h2>
         <button
           className="text-xs text-brand-600 hover:underline disabled:text-ink-400"
           disabled={pending}

@@ -9,6 +9,7 @@ import DealAiPanel from "@/components/deal-ai-panel";
 import ActivityComposer from "@/components/activity-composer";
 import DealBrief from "@/components/deal-brief";
 import DealEnrollments from "@/components/deal-enrollments";
+import NewTaskForm from "@/components/new-task-form";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,7 @@ export default async function DealDetail({ params }: { params: Promise<{ id: str
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
           <ActivityComposer dealId={deal.id} contactId={contact?.id ?? null} contactEmail={contact?.email ?? null} />
+          <NewTaskForm compact defaultDealId={deal.id} />
           <DealEnrollments dealId={deal.id} />
 
           <section className="card p-5">

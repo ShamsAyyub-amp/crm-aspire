@@ -8,6 +8,7 @@ import NextActions from "@/components/next-actions";
 import HealthDot from "@/components/health-dot";
 import QuotaWidget from "@/components/quota-widget";
 import CrossInsights from "@/components/cross-insights";
+import CoachHero from "@/components/coach-hero";
 import { headers } from "next/headers";
 import type { Quota } from "@/lib/types";
 
@@ -71,9 +72,11 @@ export default async function Dashboard() {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-ink-500">Where the team stands and what to do next.</p>
+          <p className="text-sm text-ink-500">Your AI sales coach has read your pipeline. Here's the take.</p>
         </div>
       </div>
+
+      <CoachHero ownerId={meId} />
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Kpi label="Open pipeline" value={moneyCompact(openValue)} />

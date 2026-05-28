@@ -38,7 +38,7 @@ export default function CrossInsights({ ownerId }: { ownerId: string }) {
     <section className="card p-5">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="text-sm font-semibold text-ink-700">Claude noticed</h2>
+          <h2 className="text-sm font-semibold text-ink-700">Your coach noticed</h2>
           <p className="text-[11px] text-ink-500">Cross-deal patterns no single rep would catch.</p>
         </div>
         <div className="flex items-center gap-1">

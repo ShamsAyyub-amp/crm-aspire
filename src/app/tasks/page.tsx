@@ -3,6 +3,8 @@ import { getCurrentUserId, listUsers } from "@/lib/user";
 import { relative } from "@/lib/format";
 import type { Deal, Task, User } from "@/lib/types";
 import TaskRow from "@/components/task-row";
+import NewTaskForm from "@/components/new-task-form";
+import { OPEN_STAGES } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +30,16 @@ export default async function TasksPage() {
   const noDate = mine.filter((t) => !t.completed_at && !t.due_at);
   const done = mine.filter((t) => t.completed_at).slice(0, 10);
 
+  const openDeals = ((dealsR.data as Deal[]) ?? []).filter((d) => OPEN_STAGES.includes(d.stage)).map((d) => ({ id: d.id, name: d.name }));
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
         <p className="text-sm text-ink-500">Your queue, sorted by what's at risk of slipping.</p>
       </div>
+
+      <NewTaskForm deals={openDeals} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Kpi label="Overdue" value={String(overdue.length)} tone={overdue.length > 0 ? "rose" : undefined} />

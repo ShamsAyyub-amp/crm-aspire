@@ -111,7 +111,7 @@ export default function CommandPalette() {
                         briefOn(r);
                       }}
                     >
-                      Brief me
+                      Coach me
                     </button>
                   </Command.Item>
                 ))}
@@ -144,6 +144,7 @@ export default function CommandPalette() {
 
                 <Command.Group heading="Pages" className="text-[10px] uppercase tracking-wider text-ink-400 px-2 mt-1">
                   {[
+                    { p: "/coach", l: "Sales Coach" },
                     { p: "/dashboard", l: "Dashboard" },
                     { p: "/pipeline", l: "Pipeline" },
                     { p: "/analytics", l: "Analytics" },
@@ -190,7 +191,7 @@ function BriefView({ state, onBack, onOpen }: { state: { deal: Result; data: Bri
         <button className="text-xs text-ink-500 hover:text-ink-900" onClick={onBack}>← Back</button>
         <button className="text-xs text-brand-600 hover:underline" onClick={onOpen}>Open deal →</button>
       </div>
-      <div className="text-sm text-ink-500">Brief on</div>
+      <div className="text-sm text-ink-500">Coach take on</div>
       <div className="text-base font-semibold">{state.deal.label}</div>
       {state.loading || !state.data ? (
         <p className="mt-4 text-sm text-ink-400">Generating brief…</p>

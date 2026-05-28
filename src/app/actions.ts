@@ -124,6 +124,36 @@ export async function setEnrollmentStatus(enrollmentId: string, status: "active"
   revalidatePath("/sequences");
 }
 
+export async function createTask(input: {
+  title: string;
+  dealId?: string | null;
+  contactId?: string | null;
+  ownerId?: string | null;
+  priority?: "low" | "normal" | "high";
+  due_at?: string | null;
+  notes?: string | null;
+}) {
+  const db = supabaseAdmin();
+  const meId = await getCurrentUserId();
+  const title = input.title.trim();
+  if (!title) return { ok: false, reason: "title required" };
+
+  await db.from("tasks").insert({
+    title,
+    deal_id: input.dealId ?? null,
+    contact_id: input.contactId ?? null,
+    owner_id: input.ownerId ?? meId,
+    priority: input.priority ?? "normal",
+    due_at: input.due_at ?? null,
+    notes: input.notes ?? null,
+  });
+
+  revalidatePath("/tasks");
+  revalidatePath("/dashboard");
+  if (input.dealId) revalidatePath(`/deals/${input.dealId}`);
+  return { ok: true };
+}
+
 export async function completeTask(taskId: string) {
   const db = supabaseAdmin();
   await db.from("tasks").update({ completed_at: new Date().toISOString() }).eq("id", taskId);
