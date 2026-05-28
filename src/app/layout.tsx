@@ -6,8 +6,8 @@ import { ToasterProvider } from "@/components/toaster";
 import { getCurrentUser, listUsers } from "@/lib/user";
 
 export const metadata: Metadata = {
-  title: "crm-aspire",
-  description: "Sales CRM where Claude is the product, not just the builder.",
+  title: "Pipelytics — Your AI sales coach",
+  description: "The CRM that makes a sales rep's life easy. Your AI sales coach reads the pipeline, tells you what to do next, and drafts the work.",
 };
 
 export const dynamic = "force-dynamic";

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
-import { getCurrentUserId, listUsers } from "@/lib/user";
+import { getCurrentUser, getCurrentUserId, listUsers } from "@/lib/user";
 import { money, moneyCompact, relative } from "@/lib/format";
 import { OPEN_STAGES, STAGES } from "@/lib/types";
-import type { Activity, Deal, User } from "@/lib/types";
+import type { Activity, Deal, Task, User } from "@/lib/types";
 import NextActions from "@/components/next-actions";
 import HealthDot from "@/components/health-dot";
 import QuotaWidget from "@/components/quota-widget";
@@ -16,158 +16,175 @@ export const dynamic = "force-dynamic";
 
 async function loadAll() {
   const db = supabaseAdmin();
-  const [deals, acts, quotas, users, me] = await Promise.all([
+  const meId = await getCurrentUserId();
+  const [deals, acts, tasks, quotas, users, me] = await Promise.all([
     db.from("deals").select("*"),
-    db.from("activities").select("*").order("occurred_at", { ascending: false }).limit(15),
-    db.from("quotas").select("*"),
+    db.from("activities").select("*").eq("owner_id", meId).order("occurred_at", { ascending: false }).limit(12),
+    db.from("tasks").select("*").eq("owner_id", meId).is("completed_at", null).order("due_at", { ascending: true, nullsFirst: false }).limit(20),
+    db.from("quotas").select("*").eq("user_id", meId),
     listUsers(),
-    getCurrentUserId(),
+    getCurrentUser(),
   ]);
   return {
-    deals: (deals.data as Deal[]) ?? [],
-    activities: (acts.data as Activity[]) ?? [],
-    quotas: (quotas.data as Quota[]) ?? [],
+    allDeals: (deals.data as Deal[]) ?? [],
+    myActivities: (acts.data as Activity[]) ?? [],
+    myTasks: (tasks.data as Task[]) ?? [],
+    myQuotas: (quotas.data as Quota[]) ?? [],
     users,
-    meId: me,
+    me,
+    meId,
   };
 }
 
 export default async function Dashboard() {
-  const { deals, activities, quotas, users, meId } = await loadAll();
+  const { allDeals, myActivities, myTasks, myQuotas, users, me, meId } = await loadAll();
 
-  const open = deals.filter((d) => OPEN_STAGES.includes(d.stage));
-  const openValue = open.reduce((s, d) => s + d.value_cents, 0);
-  const weighted = open.reduce((s, d) => s + (d.value_cents * d.probability) / 100, 0);
+  // MINE — every metric on this page is rep-scoped.
+  const myDeals = allDeals.filter((d) => d.owner_id === meId);
+  const myOpen = myDeals.filter((d) => OPEN_STAGES.includes(d.stage));
+  const myOpenValue = myOpen.reduce((s, d) => s + d.value_cents, 0);
+  const myWeighted = myOpen.reduce((s, d) => s + (d.value_cents * d.probability) / 100, 0);
 
-  const lastClosed = deals.filter((d) => d.status === "won" || d.status === "lost");
-  const won = lastClosed.filter((d) => d.status === "won");
-  const wonValue = won.reduce((s, d) => s + d.value_cents, 0);
-  const winRate = lastClosed.length ? Math.round((won.length / lastClosed.length) * 100) : 0;
-  const avgDeal = won.length ? Math.round(wonValue / won.length) : 0;
+  // Won this month, not all-time.
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const myWonThisMonth = myDeals.filter(
+    (d) => d.status === "won" && d.closed_at && new Date(d.closed_at) >= monthStart
+  );
+  const myWonValueMonth = myWonThisMonth.reduce((s, d) => s + d.value_cents, 0);
 
-  const atRisk = open.filter((d) => (d.health_score ?? 100) < 60).length;
+  const myClosed = myDeals.filter((d) => d.status === "won" || d.status === "lost");
+  const myWon = myClosed.filter((d) => d.status === "won");
+  const myWinRate = myClosed.length ? Math.round((myWon.length / myClosed.length) * 100) : 0;
 
-  const byStage = STAGES.filter((s) => OPEN_STAGES.includes(s.id)).map((s) => {
-    const items = open.filter((d) => d.stage === s.id);
+  const myAtRisk = myOpen.filter((d) => (d.health_score ?? 100) < 60).length;
+
+  const now = Date.now();
+  const todayCutoff = new Date();
+  todayCutoff.setHours(23, 59, 59, 999);
+  const overdue = myTasks.filter((t) => t.due_at && new Date(t.due_at).getTime() < now);
+  const dueToday = myTasks.filter(
+    (t) => t.due_at && new Date(t.due_at).getTime() >= now && new Date(t.due_at) <= todayCutoff
+  );
+
+  const myByStage = STAGES.filter((s) => OPEN_STAGES.includes(s.id)).map((s) => {
+    const items = myOpen.filter((d) => d.stage === s.id);
     return { ...s, count: items.length, value: items.reduce((a, b) => a + b.value_cents, 0) };
   });
 
-  const leaderboard = users
-    .map((u) => {
-      const w = won.filter((d) => d.owner_id === u.id);
-      const open = deals.filter((d) => d.owner_id === u.id && OPEN_STAGES.includes(d.stage));
-      return { u, wonCount: w.length, wonValue: w.reduce((a, b) => a + b.value_cents, 0), pipelineValue: open.reduce((a, b) => a + b.value_cents, 0) };
-    })
-    .sort((a, b) => b.wonValue - a.wonValue)
-    .slice(0, 5);
-
-  // Compute next-actions URL on the server so the client component can call it.
+  // Compute base URL for client components that need to fetch.
   const h = await headers();
   const proto = h.get("x-forwarded-proto") ?? "http";
   const host = h.get("host");
   const baseUrl = `${proto}://${host}`;
 
+  const firstName = me?.name?.split(" ")[0] ?? "there";
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? "Good morning" : hour < 17 ? "Hey" : "Evening";
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-ink-500">Your AI sales coach has read your pipeline. Here's the take.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {greet}, {firstName}.
+          </h1>
+          <p className="text-sm text-ink-500">
+            Your day, your pipeline, your coach. <Link href="/analytics" className="text-brand-600 hover:underline">Team view →</Link>
+          </p>
         </div>
       </div>
 
       <CoachHero ownerId={meId} />
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <Kpi label="Open pipeline" value={moneyCompact(openValue)} />
-        <Kpi label="Weighted forecast" value={moneyCompact(weighted)} hint="Σ value × stage prob" />
-        <Kpi label="Won (closed)" value={moneyCompact(wonValue)} hint={`${won.length} deals`} />
-        <Kpi label="Win rate" value={`${winRate}%`} hint={`${won.length}/${lastClosed.length}`} />
-        <Kpi label="Avg deal size" value={moneyCompact(avgDeal)} />
-        <Kpi label="At risk" value={String(atRisk)} hint="Health < 60" tone={atRisk > 0 ? "warn" : "ok"} />
+        <Kpi label="Tasks today" value={String(dueToday.length)} hint={overdue.length > 0 ? `${overdue.length} overdue` : "on track"} tone={overdue.length > 0 ? "warn" : undefined} href="/tasks" />
+        <Kpi label="My open pipeline" value={moneyCompact(myOpenValue)} hint={`${myOpen.length} deals`} href="/pipeline" />
+        <Kpi label="Weighted forecast" value={moneyCompact(myWeighted)} hint="Σ value × stage prob" />
+        <Kpi label="Won this month" value={moneyCompact(myWonValueMonth)} hint={`${myWonThisMonth.length} deals`} />
+        <Kpi label="My win rate" value={`${myWinRate}%`} hint={`${myWon.length}/${myClosed.length}`} />
+        <Kpi label="At risk" value={String(myAtRisk)} hint="Health < 60" tone={myAtRisk > 0 ? "warn" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          <MyDay overdue={overdue} dueToday={dueToday} myDeals={myDeals} />
+
           <section className="card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-ink-700">Pipeline by stage</h2>
+              <h2 className="text-sm font-semibold text-ink-700">My pipeline by stage</h2>
               <Link href="/pipeline" className="text-xs text-brand-600 hover:underline">Open pipeline →</Link>
             </div>
-            <div className="space-y-2">
-              {byStage.map((s) => {
-                const max = Math.max(1, ...byStage.map((x) => x.value));
-                const pct = Math.round((s.value / max) * 100);
-                return (
-                  <div key={s.id} className="flex items-center gap-3 text-sm">
-                    <div className="w-28 text-ink-700">{s.label}</div>
-                    <div className="flex-1 h-6 bg-ink-100 rounded overflow-hidden">
-                      <div className="h-full bg-brand-500/80" style={{ width: `${pct}%` }} />
+            {myByStage.every((s) => s.count === 0) ? (
+              <p className="text-sm text-ink-400">You don&apos;t own any open deals.</p>
+            ) : (
+              <div className="space-y-2">
+                {myByStage.map((s) => {
+                  const max = Math.max(1, ...myByStage.map((x) => x.value));
+                  const pct = Math.round((s.value / max) * 100);
+                  return (
+                    <div key={s.id} className="flex items-center gap-3 text-sm">
+                      <div className="w-28 text-ink-700">{s.label}</div>
+                      <div className="flex-1 h-6 bg-ink-100 rounded overflow-hidden">
+                        <div className="h-full bg-brand-500/80" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="w-20 text-right tabular-nums text-ink-700">{moneyCompact(s.value)}</div>
+                      <div className="w-10 text-right tabular-nums text-ink-500">{s.count}</div>
                     </div>
-                    <div className="w-20 text-right tabular-nums text-ink-700">{moneyCompact(s.value)}</div>
-                    <div className="w-10 text-right tabular-nums text-ink-500">{s.count}</div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section className="card p-5">
-            <h2 className="text-sm font-semibold text-ink-700 mb-4">Recent activity</h2>
-            <ul className="divide-y divide-ink-100">
-              {activities.map((a) => (
-                <li key={a.id} className="py-2.5 flex items-start gap-3 text-sm">
-                  <ActivityIcon t={a.type} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-ink-900 truncate">
-                      {a.subject ?? labelFor(a.type)}
+            <h2 className="text-sm font-semibold text-ink-700 mb-4">My recent activity</h2>
+            {myActivities.length === 0 ? (
+              <p className="text-sm text-ink-400">No activity in the last few days. Time to log something.</p>
+            ) : (
+              <ul className="divide-y divide-ink-100">
+                {myActivities.map((a) => (
+                  <li key={a.id} className="py-2.5 flex items-start gap-3 text-sm">
+                    <ActivityIcon t={a.type} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-ink-900 truncate">{a.subject ?? labelFor(a.type)}</div>
+                      {a.body && <div className="text-ink-500 text-xs truncate">{a.body}</div>}
                     </div>
-                    {a.body && <div className="text-ink-500 text-xs truncate">{a.body}</div>}
-                  </div>
-                  <div className="text-xs text-ink-400 whitespace-nowrap">{relative(a.occurred_at)}</div>
-                </li>
-              ))}
-            </ul>
+                    <div className="text-xs text-ink-400 whitespace-nowrap">{relative(a.occurred_at)}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
 
         <div className="space-y-6">
           <NextActions baseUrl={baseUrl} ownerId={meId} />
-
           <CrossInsights ownerId={meId} />
-
-          <QuotaWidget quotas={quotas} users={users} deals={deals} />
-
-          <section className="card p-5">
-            <h2 className="text-sm font-semibold text-ink-700 mb-3">Leaderboard</h2>
-            <ol className="space-y-2 text-sm">
-              {leaderboard.map((row, i) => (
-                <li key={row.u.id} className="flex items-center gap-3">
-                  <span className="w-5 text-ink-400 text-xs">{i + 1}</span>
-                  <span className="flex-1">{row.u.name}</span>
-                  <span className="tabular-nums">{moneyCompact(row.wonValue)}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
+          <QuotaWidget quotas={myQuotas} users={users} deals={myDeals} />
 
           <section className="card p-5">
-            <h2 className="text-sm font-semibold text-ink-700 mb-3">Top at-risk deals</h2>
-            <ul className="space-y-2 text-sm">
-              {open
-                .slice()
-                .sort((a, b) => (a.health_score ?? 100) - (b.health_score ?? 100))
-                .slice(0, 5)
-                .map((d) => (
-                  <li key={d.id} className="flex items-center gap-3">
-                    <HealthDot score={d.health_score} />
-                    <Link href={`/deals/${d.id}`} className="flex-1 hover:underline truncate">
-                      {d.name}
-                    </Link>
-                    <span className="tabular-nums text-ink-500">{moneyCompact(d.value_cents)}</span>
-                  </li>
-                ))}
-            </ul>
+            <h2 className="text-sm font-semibold text-ink-700 mb-3">My at-risk deals</h2>
+            {myOpen.filter((d) => (d.health_score ?? 100) < 60).length === 0 ? (
+              <p className="text-sm text-ink-400">Nothing flagged. Your coach is happy.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {myOpen
+                  .slice()
+                  .sort((a, b) => (a.health_score ?? 100) - (b.health_score ?? 100))
+                  .slice(0, 5)
+                  .map((d) => (
+                    <li key={d.id} className="flex items-center gap-3">
+                      <HealthDot score={d.health_score} />
+                      <Link href={`/deals/${d.id}`} className="flex-1 hover:underline truncate">
+                        {d.name}
+                      </Link>
+                      <span className="tabular-nums text-ink-500">{moneyCompact(d.value_cents)}</span>
+                    </li>
+                  ))}
+              </ul>
+            )}
           </section>
         </div>
       </div>
@@ -175,13 +192,70 @@ export default async function Dashboard() {
   );
 }
 
-function Kpi({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: "ok" | "warn" }) {
+function MyDay({ overdue, dueToday, myDeals }: { overdue: Task[]; dueToday: Task[]; myDeals: Deal[] }) {
+  const dealById = new Map(myDeals.map((d) => [d.id, d] as const));
+  const items = [...overdue, ...dueToday].slice(0, 6);
+
   return (
-    <div className="card p-4">
+    <section className="card p-5 border-l-4 border-l-amber-400">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-ink-700">Today</h2>
+        <Link href="/tasks" className="text-xs text-brand-600 hover:underline">All tasks →</Link>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-sm text-ink-400">No tasks for today. Add one from /tasks, or just keep moving — your coach will tell you if it spots something to do.</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((t) => {
+            const isOverdue = t.due_at ? new Date(t.due_at).getTime() < Date.now() : false;
+            const deal = t.deal_id ? dealById.get(t.deal_id) : null;
+            return (
+              <li key={t.id} className="flex items-center gap-3 text-sm">
+                <span className={`w-1.5 h-1.5 rounded-full ${t.priority === "high" ? "bg-rose-500" : t.priority === "low" ? "bg-ink-300" : "bg-amber-500"}`} />
+                <span className="flex-1 truncate">{t.title}</span>
+                {deal && (
+                  <Link href={`/deals/${deal.id}`} className="text-xs text-brand-600 hover:underline truncate max-w-[180px]">
+                    {deal.name}
+                  </Link>
+                )}
+                <span className={`text-xs whitespace-nowrap ${isOverdue ? "text-rose-600" : "text-ink-500"}`}>
+                  {t.due_at ? relative(t.due_at) : "—"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  hint,
+  tone,
+  href,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "warn";
+  href?: string;
+}) {
+  const inner = (
+    <div className="card p-4 h-full">
       <div className="text-xs text-ink-500">{label}</div>
       <div className={`text-xl font-semibold mt-1 ${tone === "warn" ? "text-amber-600" : ""}`}>{value}</div>
       {hint && <div className="text-[11px] text-ink-400 mt-0.5">{hint}</div>}
     </div>
+  );
+  return href ? (
+    <Link href={href} className="block hover:opacity-90 transition-opacity">
+      {inner}
+    </Link>
+  ) : (
+    inner
   );
 }
 

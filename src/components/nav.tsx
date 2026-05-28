@@ -20,8 +20,8 @@ export default function Nav({ me, users }: { me: User | null; users: User[] }) {
     <header className="bg-white border-b border-ink-100">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-6">
         <Link href="/dashboard" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-brand-600 text-white text-xs">CR</span>
-          <span>crm-aspire <span className="text-ink-400 font-normal text-xs">· AI sales coach</span></span>
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-brand-600 text-white text-xs font-bold">P</span>
+          <span>Pipelytics <span className="text-ink-400 font-normal text-xs hidden sm:inline">· AI sales coach</span></span>
         </Link>
         <nav className="flex items-center gap-1 ml-2">
           {links.map((l) => (

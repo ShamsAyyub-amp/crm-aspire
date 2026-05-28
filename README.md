@@ -1,6 +1,8 @@
-# crm-aspire
+# Pipelytics — your AI sales coach
 
-A sales CRM where Claude is the product, not just the builder. Built for the Aspire Leadership Summit "Build a Sales CRM with Claude" workshop. Spine + AI-first features, every external mocked behind realistic heuristics so the app demos end-to-end without API keys.
+A sales CRM repositioned around one promise: **make a rep's life easy**. Pipelytics has a coach that reads the pipeline every morning, tells the rep what to do next, drafts the next email, and surfaces what a manager would catch — without burning the rep's time on 1:1 status meetings.
+
+Built for the Aspire Leadership Summit "Build a Sales CRM with Claude" workshop. Spine + AI-first features, every external mocked behind realistic heuristics so the app demos end-to-end without API keys.
 
 ## What's in v2
 
