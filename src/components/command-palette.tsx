@@ -142,6 +142,28 @@ export default function CommandPalette() {
                   </Command.Item>
                 ))}
 
+                <Command.Group heading="Create" className="text-[10px] uppercase tracking-wider text-ink-400 px-2 mt-1">
+                  {[
+                    { p: "/pipeline?new=1", l: "Create deal", hint: "+ deal" },
+                    { p: "/companies?new=1", l: "Create company", hint: "+ company" },
+                    { p: "/contacts?new=1", l: "Create contact", hint: "+ contact" },
+                  ].map((x) => (
+                    <Command.Item
+                      key={x.p}
+                      value={`create-${x.p}`}
+                      onSelect={() => {
+                        router.push(x.p);
+                        reset();
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer data-[selected=true]:bg-brand-50 normal-case tracking-normal text-ink-900"
+                    >
+                      <span className="w-5 h-5 rounded bg-brand-100 text-brand-700 text-[11px] font-bold flex items-center justify-center">+</span>
+                      <span className="flex-1 text-sm">{x.l}</span>
+                      <span className="text-2xs text-ink-400">{x.hint}</span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+
                 <Command.Group heading="Pages" className="text-[10px] uppercase tracking-wider text-ink-400 px-2 mt-1">
                   {[
                     { p: "/coach", l: "Sales Coach" },

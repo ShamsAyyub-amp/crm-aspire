@@ -3,6 +3,7 @@ import { listUsers } from "@/lib/user";
 import { moneyCompact } from "@/lib/format";
 import { OPEN_STAGES } from "@/lib/types";
 import type { Company, Contact, Deal } from "@/lib/types";
+import NewCompanyButton from "@/components/new-company-button";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,13 @@ export default async function Companies() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <div className="eyebrow mb-1.5">The Directory</div>
-        <h1 className="display-headline text-ink-900 text-4xl">Companies</h1>
-        <p className="text-sm text-ink-500">{companies.length} companies.</p>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="eyebrow mb-1.5">The Directory</div>
+          <h1 className="display-headline text-ink-900 text-4xl">Companies</h1>
+          <p className="text-sm text-ink-500">{companies.length} companies.</p>
+        </div>
+        <NewCompanyButton />
       </div>
       <div className="card overflow-hidden">
         <table className="w-full text-sm">

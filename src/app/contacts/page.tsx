@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
 import { listUsers } from "@/lib/user";
 import type { Company, Contact, User } from "@/lib/types";
+import NewContactButton from "@/components/new-contact-button";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +14,19 @@ export default async function Contacts() {
     listUsers(),
   ]);
   const contacts = (contactsR.data as Contact[]) ?? [];
-  const companies = new Map(((companiesR.data as Company[]) ?? []).map((c) => [c.id, c] as const));
+  const companiesList = (companiesR.data as Company[]) ?? [];
+  const companies = new Map(companiesList.map((c) => [c.id, c] as const));
   const usersMap = new Map(users.map((u) => [u.id, u] as const));
 
   return (
     <div className="space-y-5">
-      <div>
-        <div className="eyebrow mb-1.5">The Rolodex</div>
-        <h1 className="display-headline text-ink-900 text-4xl">Contacts</h1>
-        <p className="text-sm text-ink-500">{contacts.length} contacts.</p>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="eyebrow mb-1.5">The Rolodex</div>
+          <h1 className="display-headline text-ink-900 text-4xl">Contacts</h1>
+          <p className="text-sm text-ink-500">{contacts.length} contacts.</p>
+        </div>
+        <NewContactButton companies={companiesList} />
       </div>
       <div className="card overflow-hidden">
         <table className="w-full text-sm">

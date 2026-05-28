@@ -124,6 +124,147 @@ export async function setEnrollmentStatus(enrollmentId: string, status: "active"
   revalidatePath("/sequences");
 }
 
+export async function createDeal(input: {
+  name: string;
+  companyId?: string | null;
+  primaryContactId?: string | null;
+  ownerId?: string | null;
+  stage?: DealStage;
+  valueCents?: number;
+  probability?: number;
+  expectedCloseDate?: string | null;
+  source?: string | null;
+}): Promise<{ ok: true; dealId: string } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  const meId = await getCurrentUserId();
+  const name = input.name.trim();
+  if (!name) return { ok: false, reason: "name required" };
+  if (!input.companyId) return { ok: false, reason: "company required" };
+
+  const stage: DealStage = input.stage ?? "lead";
+  const stageProb = STAGES.find((s) => s.id === stage)?.probability ?? 10;
+  const probability = input.probability ?? stageProb;
+
+  const { data, error } = await db
+    .from("deals")
+    .insert({
+      name,
+      company_id: input.companyId,
+      primary_contact_id: input.primaryContactId ?? null,
+      owner_id: input.ownerId ?? meId,
+      stage,
+      status: stage === "closed_won" ? "won" : stage === "closed_lost" ? "lost" : "open",
+      value_cents: input.valueCents ?? 0,
+      probability,
+      expected_close_date: input.expectedCloseDate ?? null,
+      source: input.source ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) return { ok: false, reason: error?.message ?? "insert failed" };
+
+  await db.from("activities").insert({
+    deal_id: data.id,
+    type: "note",
+    subject: "Deal created",
+    body: `Created in stage ${stage}.`,
+    owner_id: meId,
+  });
+
+  revalidatePath("/pipeline");
+  revalidatePath("/dashboard");
+  revalidatePath("/analytics");
+  revalidatePath("/companies");
+  return { ok: true, dealId: data.id };
+}
+
+export async function createCompany(input: {
+  name: string;
+  domain?: string | null;
+  industry?: string | null;
+  employees?: number | null;
+  city?: string | null;
+  country?: string | null;
+  ownerId?: string | null;
+}): Promise<{ ok: true; companyId: string } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  const meId = await getCurrentUserId();
+  const name = input.name.trim();
+  if (!name) return { ok: false, reason: "name required" };
+
+  // Dedupe by domain — silent if a company already exists on the same domain.
+  if (input.domain) {
+    const cleanDomain = input.domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
+    if (cleanDomain) {
+      const { data: existing } = await db
+        .from("companies")
+        .select("id,name")
+        .eq("domain", cleanDomain)
+        .maybeSingle();
+      if (existing) {
+        return { ok: false, reason: `A company already exists on ${cleanDomain}: ${existing.name}` };
+      }
+    }
+  }
+
+  const { data, error } = await db
+    .from("companies")
+    .insert({
+      name,
+      domain: input.domain?.trim().toLowerCase() || null,
+      industry: input.industry?.trim() || null,
+      employees: input.employees ?? null,
+      city: input.city?.trim() || null,
+      country: input.country?.trim() || null,
+      owner_id: input.ownerId ?? meId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) return { ok: false, reason: error?.message ?? "insert failed" };
+
+  revalidatePath("/companies");
+  revalidatePath("/pipeline");
+  return { ok: true, companyId: data.id };
+}
+
+export async function createContact(input: {
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  title?: string | null;
+  companyId?: string | null;
+  ownerId?: string | null;
+}): Promise<{ ok: true; contactId: string } | { ok: false; reason: string }> {
+  const db = supabaseAdmin();
+  const meId = await getCurrentUserId();
+  const first = input.firstName.trim();
+  const last = input.lastName.trim();
+  if (!first || !last) return { ok: false, reason: "first and last name required" };
+
+  const { data, error } = await db
+    .from("contacts")
+    .insert({
+      first_name: first,
+      last_name: last,
+      email: input.email?.trim().toLowerCase() || null,
+      phone: input.phone?.trim() || null,
+      title: input.title?.trim() || null,
+      company_id: input.companyId ?? null,
+      owner_id: input.ownerId ?? meId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) return { ok: false, reason: error?.message ?? "insert failed" };
+
+  revalidatePath("/contacts");
+  if (input.companyId) revalidatePath("/companies");
+  return { ok: true, contactId: data.id };
+}
+
 export async function createTask(input: {
   title: string;
   dealId?: string | null;
